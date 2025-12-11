@@ -148,6 +148,67 @@ export async function POST(request: NextRequest) {
           count: ids.length 
         })
       }
+      
+      case 'delete_by_keywords': {
+        const { keywords } = body
+        
+        // Supprimer toutes les entrées qui contiennent certains mots-clés
+        const deleted = await db.knowledgeBase.deleteMany({
+          where: {
+            OR: [
+              {
+                question: {
+                  contains: keywords,
+                  mode: 'insensitive'
+                }
+              },
+              {
+                answer: {
+                  contains: keywords,
+                  mode: 'insensitive'
+                }
+              }
+            ]
+          }
+        })
+        
+        return NextResponse.json({ 
+          success: true,
+          deleted: deleted.count,
+          keywords
+        })
+      }
+      
+      case 'find_conflicts': {
+        const { newInfo } = body
+        
+        // Trouver les entrées qui pourraient être en conflit
+        const allEntries = await db.knowledgeBase.findMany()
+        const conflicts: any[] = []
+        
+        // Extraire les mots-clés importants
+        const keywords = newInfo.toLowerCase().match(/\b\w{4,}\b/g) || []
+        
+        for (const entry of allEntries) {
+          const entryText = `${entry.question} ${entry.answer}`.toLowerCase()
+          const sharedKeywords = keywords.filter(kw => entryText.includes(kw))
+          
+          if (sharedKeywords.length > 2 && !entryText.includes(newInfo.toLowerCase())) {
+            conflicts.push({
+              id: entry.id,
+              question: entry.question,
+              answer: entry.answer.substring(0, 150) + '...',
+              sharedKeywords: sharedKeywords.slice(0, 3)
+            })
+          }
+        }
+        
+        return NextResponse.json({ 
+          success: true,
+          conflicts,
+          count: conflicts.length
+        })
+      }
 
       case 'get_stats': {
         const stats = await db.knowledgeBase.groupBy({

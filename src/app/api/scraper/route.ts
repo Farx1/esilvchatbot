@@ -16,11 +16,37 @@ interface ScraperResult {
 class ESILVWebScraper {
   private readonly baseUrl = 'https://www.esilv.fr'
   
+  // Mapping query → page URL
+  private readonly pageMapping: { [key: string]: string } = {
+    'alumni|anciens|diplômés|réseau': '/entreprises-debouches/reseau-des-anciens/',
+    'stage|stages': '/entreprises-debouches/stages-ingenieurs/',
+    'alternance|apprentissage': '/entreprises-debouches/filieres-en-alternance/',
+    'salaire|emploi|débouché|premier emploi': '/entreprises-debouches/enquete-premier-emploi-ingenieur/',
+    'admission|concours|avenir': '/admissions/',
+    'majeure|spécialisation|cycle ingénieur': '/formations/cycle-ingenieur/majeures/',
+    'campus|vie étudiante|associations': '/lecole/vie-etudiante/',
+    'international|étranger|erasmus': '/international/',
+    'recherche|professeur|devinci research': '/recherche/',
+  }
+  
   async scrapeESILVInfo(query: string, currentDate?: Date, deepScrape: boolean = true): Promise<ScraperResult[]> {
     const results: ScraperResult[] = []
     
     // Détecter si c'est une question sur l'actualité
     const isNewsQuery = /\b(actualité|actualités|news|dernier|dernière|récent|nouveau)\b/i.test(query)
+    
+    // Détecter la page cible basée sur les mots-clés
+    let targetPage: string | null = null
+    const lowerQuery = query.toLowerCase()
+    
+    for (const [keywords, page] of Object.entries(this.pageMapping)) {
+      const keywordList = keywords.split('|')
+      if (keywordList.some(kw => lowerQuery.includes(kw))) {
+        targetPage = page
+        console.log(`🎯 Page cible détectée: ${page} (mots-clés: ${keywords})`)
+        break
+      }
+    }
     
     try {
       if (isNewsQuery) {
@@ -33,6 +59,22 @@ class ESILVWebScraper {
           // Fallback to mock news data
           const mockResults = this.generateMockNewsData(currentDate)
           results.push(...mockResults)
+        }
+      } else if (targetPage) {
+        // Scraper la page spécifique détectée
+        console.log(`📄 Scraping page spécifique: ${targetPage}`)
+        const pageResults = await this.scrapeSpecificPage(targetPage, query)
+        if (pageResults.length > 0) {
+          results.push(...pageResults)
+        } else {
+          // Fallback to general scraping
+          const realResults = await this.realWebScrape(query)
+          if (realResults.length > 0) {
+            results.push(...realResults)
+          } else {
+            const mockResults = this.generateMockScrapedData(query)
+            results.push(...mockResults)
+          }
         }
       } else {
         // Pour les autres questions, recherche générale
@@ -309,6 +351,92 @@ class ESILVWebScraper {
         date: dateStr
       }
     ]
+  }
+
+  // Scraper une page spécifique et extraire les informations pertinentes
+  private async scrapeSpecificPage(pagePath: string, query: string): Promise<ScraperResult[]> {
+    const results: ScraperResult[] = []
+    const fullUrl = `${this.baseUrl}${pagePath}`
+    
+    try {
+      console.log(`📥 Fetching page: ${fullUrl}`)
+      
+      const response = await fetch(fullUrl, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        },
+      })
+      
+      if (!response.ok) {
+        console.log(`❌ HTTP error! status: ${response.status}`)
+        return results
+      }
+      
+      const html = await response.text()
+      const $ = cheerio.load(html)
+      
+      // Extraire tous les paragraphes et headings pertinents
+      const contentPieces: string[] = []
+      
+      // Cibler le contenu principal de la page
+      $('h1, h2, h3, h4, p, li').each((i, el) => {
+        const text = $(el).text().trim()
+        // Filtrer le bruit (navigation, footer, etc.)
+        if (text && text.length > 20 && text.length < 500) {
+          contentPieces.push(text)
+        }
+      })
+      
+      // Rechercher les sections pertinentes basées sur la requête
+      const lowerQuery = query.toLowerCase()
+      const relevantContent: string[] = []
+      
+      contentPieces.forEach(piece => {
+        const lowerPiece = piece.toLowerCase()
+        // Si le texte contient des mots-clés de la requête
+        const queryWords = lowerQuery.split(' ').filter(w => w.length > 3)
+        const matches = queryWords.filter(word => lowerPiece.includes(word)).length
+        
+        if (matches > 0) {
+          relevantContent.push(piece)
+        }
+      })
+      
+      // Si on trouve du contenu pertinent
+      if (relevantContent.length > 0) {
+        // Prendre les 5 premiers morceaux les plus pertinents
+        const topContent = relevantContent.slice(0, 5).join(' ')
+        
+        results.push({
+          title: $('h1').first().text().trim() || `Information ESILV`,
+          content: topContent.substring(0, 800) + (topContent.length > 800 ? '...' : ''),
+          url: fullUrl,
+          confidence: 0.90,
+          category: pagePath.split('/')[1] || 'general',
+        })
+        
+        console.log(`✅ ${relevantContent.length} morceaux de contenu pertinent extraits`)
+      } else {
+        // Fallback : prendre les premiers paragraphes de la page
+        const fallbackContent = contentPieces.slice(0, 3).join(' ')
+        if (fallbackContent) {
+          results.push({
+            title: $('h1').first().text().trim() || `Information ESILV`,
+            content: fallbackContent.substring(0, 600) + '...',
+            url: fullUrl,
+            confidence: 0.70,
+            category: pagePath.split('/')[1] || 'general',
+          })
+          console.log(`⚠️ Aucun contenu spécifique trouvé, utilisation du contenu général`)
+        }
+      }
+      
+    } catch (error) {
+      console.error(`Error scraping specific page ${fullUrl}:`, error)
+    }
+    
+    return results
   }
 
   private async realWebScrape(query: string): Promise<ScraperResult[]> {
