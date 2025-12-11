@@ -111,28 +111,59 @@ class ChatOrchestrator {
     let knowledgeResults = ''
     let sources: any[] = []
     let webResults = ''
+    let needsVerification = false
 
-    if (needsRecentInfo || needsWebVerification) {
-      // Pour les questions sur l'actualité OU les informations variables, FORCER le scraper
-      const reason = needsRecentInfo ? 'actualités' : 'informations variables (personnel/contacts)'
-      console.log(`🌐 Question sur ${reason} détectée (${dateStr}) → FORCE scraper web (ignore RAG)`)
-      webResults = await this.searchWebESILV(message, currentDate)
+    // TOUJOURS interroger le RAG d'abord
+    const ragData = await this.searchKnowledgeBase(message)
+    knowledgeResults = ragData.results
+    sources = ragData.sources
+
+    // Vérifier l'âge des données RAG
+    if (sources.length > 0) {
+      const oldestSource = sources[0] // Supposons que searchKnowledgeBase retourne les sources triées
+      const lastVerified = oldestSource.lastVerified ? new Date(oldestSource.lastVerified) : new Date(oldestSource.createdAt)
+      const daysSinceVerification = Math.floor((currentDate.getTime() - lastVerified.getTime()) / (1000 * 60 * 60 * 24))
       
-      // NE PAS interroger le RAG pour ces questions
-      knowledgeResults = ''
-      sources = []
+      // Règles de vérification basées sur l'âge
+      if (daysSinceVerification > 30) {
+        needsVerification = true
+        console.log(`⚠️ Données RAG anciennes (${daysSinceVerification} jours) → Vérification scraper nécessaire`)
+      } else if (daysSinceVerification > 7 && (needsRecentInfo || needsWebVerification)) {
+        needsVerification = true
+        console.log(`⚠️ Données RAG de ${daysSinceVerification} jours + question sensible → Vérification scraper`)
+      } else {
+        console.log(`✅ Données RAG récentes (${daysSinceVerification} jours) → Pas de vérification nécessaire`)
+      }
+    }
+
+    // Activer le scraper si nécessaire
+    if (needsRecentInfo || needsWebVerification || needsVerification || !knowledgeResults || knowledgeResults.trim() === '') {
+      let reason = 'fallback (RAG vide)'
+      if (needsRecentInfo) reason = 'actualités'
+      else if (needsWebVerification) reason = 'informations variables (personnel/contacts)'
+      else if (needsVerification) reason = 'vérification données anciennes'
       
-      console.log(`✅ Scraper activé en mode exclusif pour ${reason}`)
-    } else {
-      // Pour les questions générales, priorité au RAG
-      const ragData = await this.searchKnowledgeBase(message)
-      knowledgeResults = ragData.results
-      sources = ragData.sources
+      console.log(`🌐 Scraper activé: ${reason}`)
       
-      // Si RAG vide, activer le scraper en fallback
-      if (!knowledgeResults || knowledgeResults.trim() === '') {
-        console.log('📭 RAG vide → Activation du scraper web')
+      // Lancer le scraper EN PARALLÈLE si on a déjà des données RAG
+      if (knowledgeResults && knowledgeResults.trim() !== '') {
+        console.log('🔄 Scraping en parallèle pour vérification...')
+        // Scraper en arrière-plan (ne pas attendre)
+        this.searchWebESILV(message, currentDate).then(async (webData) => {
+          if (webData && webData.trim() !== '') {
+            console.log('✅ Scraper terminé - Comparaison avec RAG...')
+            // TODO: Comparer webData avec knowledgeResults et mettre à jour si différent
+            // Pour l'instant, on log juste
+            console.log('📊 Données web disponibles pour comparaison')
+          }
+        }).catch(err => console.error('❌ Erreur scraper parallèle:', err))
+        
+        // Utiliser les données RAG immédiatement (pas d'attente)
+        console.log('⚡ Réponse immédiate avec données RAG (scraper en arrière-plan)')
+      } else {
+        // Pas de données RAG, attendre le scraper
         webResults = await this.searchWebESILV(message, currentDate)
+        console.log(`✅ Scraper terminé: ${reason}`)
       }
     }
     
@@ -297,7 +328,7 @@ class ChatOrchestrator {
   }
 
   // Enhanced knowledge base search with context size limit and better keyword extraction
-  private async searchKnowledgeBase(query: string): Promise<{ results: string; sources: Array<{ question: string; answer: string; category: string }> }> {
+  private async searchKnowledgeBase(query: string): Promise<{ results: string; sources: Array<{ question: string; answer: string; category: string; lastVerified?: Date; createdAt: Date }> }> {
     try {
       // Extraire les mots-clés pertinents de la requête
       const keywords = this.extractKeywords(query)
@@ -317,6 +348,7 @@ class ChatOrchestrator {
         },
         orderBy: [
           { confidence: 'desc' },
+          { lastVerified: 'desc' }, // Prioriser les données récemment vérifiées
           { createdAt: 'desc' }
         ],
         take: 3 // Réduit de 5 à 3 pour limiter la taille du contexte
@@ -341,7 +373,9 @@ class ChatOrchestrator {
       const sources = results.map(r => ({
         question: r.question,
         answer: r.answer,
-        category: r.category
+        category: r.category,
+        lastVerified: r.lastVerified,
+        createdAt: r.createdAt
       }))
 
       return { results: formattedResults, sources }

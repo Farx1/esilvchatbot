@@ -74,12 +74,13 @@ model Document {
 }
 
 model KnowledgeBase {
-  id          String   @id @default(cuid())
-  question    String
-  answer      String
-  category    String   // 'programs', 'admissions', 'courses', etc.
-  confidence  Float?
-  source      String?  // URL source de l'information
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id            String   @id @default(cuid())
+  question      String
+  answer        String
+  category      String   // 'programs', 'admissions', 'courses', etc.
+  confidence    Float?
+  source        String?  // URL source de l'information
+  lastVerified  DateTime @default(now()) // Dernière vérification via scraper
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 }
