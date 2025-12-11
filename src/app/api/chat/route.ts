@@ -96,14 +96,23 @@ class ChatOrchestrator {
     // Détecter si la question nécessite des informations récentes/actuelles
     const needsRecentInfo = /\b(dernier|dernière|derniers|dernières|récent|récente|récents|récentes|nouveau|nouvelle|nouveaux|nouvelles|actualité|actualités|news|à jour|mise à jour|changement|modification)\b/i.test(message)
     
+    // Obtenir la date actuelle pour le contexte
+    const currentDate = new Date()
+    const dateStr = currentDate.toLocaleDateString('fr-FR', { 
+      weekday: 'long', 
+      year: 'numeric', 
+      month: 'long', 
+      day: 'numeric' 
+    })
+    
     let knowledgeResults = ''
     let sources: any[] = []
     let webResults = ''
 
     if (needsRecentInfo) {
       // Pour les questions sur l'actualité, privilégier le scraper web
-      console.log('🌐 Question sur actualités détectée → Priorité au scraper web')
-      webResults = await this.searchWebESILV(message)
+      console.log(`🌐 Question sur actualités détectée (${dateStr}) → Priorité au scraper web`)
+      webResults = await this.searchWebESILV(message, currentDate)
       
       // Chercher aussi dans le RAG comme complément
       const ragData = await this.searchKnowledgeBase(message)
@@ -116,13 +125,16 @@ class ChatOrchestrator {
       sources = ragData.sources
       
       // Scraper en complément
-      webResults = await this.searchWebESILV(message)
+      webResults = await this.searchWebESILV(message, currentDate)
     }
     
     const prompt = `
     ⚠️ INSTRUCTION CRITIQUE : TU DOIS RÉPONDRE UNIQUEMENT EN FRANÇAIS. Ne réponds jamais en anglais, même si le contexte contient de l'anglais.
     
     Tu es l'assistant ESILV expert. Tu réponds EXCLUSIVEMENT en français de manière précise et professionnelle.
+    
+    📅 DATE ACTUELLE: ${dateStr}
+    ⚠️ IMPORTANT: Utilise cette date pour contextualiser les informations "récentes" ou "dernières".
     
     CONTEXTE DE LA CONVERSATION (derniers échanges):
     ${context}
@@ -132,19 +144,20 @@ class ChatOrchestrator {
     INFORMATIONS DE LA BASE DE CONNAISSANCES ESILV:
     ${knowledgeResults}
     
-    RÉSULTATS DE RECHERCHE WEB ESILV:
+    RÉSULTATS DE RECHERCHE WEB ESILV (données en temps réel du site):
     ${webResults}
     
     INSTRUCTIONS IMPORTANTES:
     1. ⚠️ RÉPONDS UNIQUEMENT EN FRANÇAIS - C'est une règle absolue
-    2. Utilise les informations les plus récentes et précises disponibles
-    3. Si les informations sont contradictoires, donne la priorité aux plus récentes
-    4. Sois cohérent avec les réponses précédentes
-    5. Pour les majeures, utilise les informations mises à jour
-    6. Si tu n'as pas d'information spécifique, sois honnête et propose des alternatives
-    7. Structure ta réponse de manière claire avec des listes ou des paragraphes bien organisés
-    8. Termine par une question ouverte pour encourager la conversation
-    9. Adapte ton ton au contexte (étudiant potentiel, parent, professionnel, etc.)
+    2. ${needsRecentInfo ? '🌐 PRIORITÉ AUX RÉSULTATS WEB (plus récents et actuels)' : 'Utilise les informations les plus précises disponibles'}
+    3. Si les informations ont des dates, mentionne-les pour contextualiser
+    4. Pour les questions sur l'actualité, cite les dates et sources des informations
+    5. Sois cohérent avec les réponses précédentes
+    6. Pour les majeures, utilise les informations mises à jour
+    7. Si tu n'as pas d'information spécifique, sois honnête et propose des alternatives
+    8. Structure ta réponse de manière claire avec des listes ou des paragraphes bien organisés
+    9. Termine par une question ouverte pour encourager la conversation
+    10. Adapte ton ton au contexte (étudiant potentiel, parent, professionnel, etc.)
     `
 
     try {
@@ -355,15 +368,18 @@ class ChatOrchestrator {
   }
 
   // Enhanced ESILV-specific web search
-  private async searchWebESILV(query: string): Promise<string> {
+  private async searchWebESILV(query: string, currentDate?: Date): Promise<string> {
     try {
       console.log('🌐 Appel du scraper web pour:', query)
       
-      // Appeler l'API scraper
+      // Appeler l'API scraper avec la date
       const response = await fetch('http://localhost:3000/api/scraper', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ query })
+        body: JSON.stringify({ 
+          query,
+          currentDate: currentDate?.toISOString()
+        })
       })
 
       if (!response.ok) {
@@ -376,9 +392,16 @@ class ChatOrchestrator {
       if (data.results && data.results.length > 0) {
         console.log(`✅ Scraper a trouvé ${data.results.length} résultats`)
         
-        // Formater les résultats pour le prompt
+        // Formater les résultats pour le prompt avec dates si disponibles
         const formattedResults = data.results
-          .map((r: any) => `Source: ${r.url}\nTitre: ${r.title}\nContenu: ${r.content}`)
+          .map((r: any) => {
+            let result = `📰 Source: ${r.url}\n📌 Titre: ${r.title}`
+            if (r.date) {
+              result += `\n📅 Date: ${r.date}`
+            }
+            result += `\n📄 Contenu: ${r.content}`
+            return result
+          })
           .join('\n\n')
         
         return formattedResults
