@@ -332,9 +332,35 @@ class ChatOrchestrator {
   // Enhanced ESILV-specific web search
   private async searchWebESILV(query: string): Promise<string> {
     try {
-      // Simple web search fallback - can be enhanced later
-      // For now, return empty as web search requires external services
-      return ''
+      console.log('🌐 Appel du scraper web pour:', query)
+      
+      // Appeler l'API scraper
+      const response = await fetch('http://localhost:3000/api/scraper', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query })
+      })
+
+      if (!response.ok) {
+        console.log('⚠️ Scraper API error:', response.status)
+        return ''
+      }
+
+      const data = await response.json()
+      
+      if (data.results && data.results.length > 0) {
+        console.log(`✅ Scraper a trouvé ${data.results.length} résultats`)
+        
+        // Formater les résultats pour le prompt
+        const formattedResults = data.results
+          .map((r: any) => `Source: ${r.url}\nTitre: ${r.title}\nContenu: ${r.content}`)
+          .join('\n\n')
+        
+        return formattedResults
+      } else {
+        console.log('❌ Scraper n\'a rien trouvé')
+        return ''
+      }
     } catch (error) {
       console.error('Error searching web:', error)
       return ''
