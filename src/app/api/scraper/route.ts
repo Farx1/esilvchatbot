@@ -202,16 +202,76 @@ class ESILVWebScraper {
     try {
       console.log('🔍 Extraction des actualités depuis la structure ESILV...')
       
-      // Structure ESILV spécifique : <div class="post_wrapper one_third">
-      // Avec <div class="post_date"> pour la date et <h5><a> pour le titre
+      // MÉTHODE ULTRA-ROBUSTE : Extraction en plusieurs passes
       
-      // Pattern pour extraire les blocs d'actualités complets
-      const postBlockPattern = /<div class="post_wrapper[^"]*">([\s\S]*?)<\/div>\s*<\/div>\s*(?:<br class="clear">)?/gi
-      let blockMatch
-      let newsExtracted = 0
+      // Pass 1: Extraire tous les liens d'articles depuis <h5><a href>
+      const articleLinkPattern = /<h5[^>]*><a href="([^"]+)"[^>]*title="([^"]*)"[^>]*>([^<]*)<\/a><\/h5>/gi
+      const articleLinks: Array<{url: string, title: string}> = []
+      let linkMatch
       
-      while ((blockMatch = postBlockPattern.exec(html)) !== null && newsExtracted < 6) { // Augmenté à 6 articles
-        const block = blockMatch[1]
+      while ((linkMatch = articleLinkPattern.exec(html)) !== null) {
+        const url = linkMatch[1]
+        const title = (linkMatch[2] || linkMatch[3]).trim()
+          .replace(/&quot;/g, '"')
+          .replace(/&#039;/g, "'")
+          .replace(/&amp;/g, '&')
+          .replace(/\s+/g, ' ')
+        
+        if (title.length > 20 && !title.match(/^(en savoir plus|demandez|nos brochures)/i)) {
+          articleLinks.push({ url, title })
+        }
+      }
+      
+      console.log(`📰 Pass 1: ${articleLinks.length} liens d'articles trouvés`)
+      
+      // Pass 2: Extraire toutes les dates
+      const datePattern = /<div class="date">(\d+)<\/div>[\s\S]{0,100}?<div class="month">(\w+)<\/div>[\s\S]{0,100}?<div class="year">(\d{4})<\/div>/gi
+      const dates: string[] = []
+      let dateMatch
+      
+      while ((dateMatch = datePattern.exec(html)) !== null) {
+        dates.push(`${dateMatch[1]} ${dateMatch[2]} ${dateMatch[3]}`)
+      }
+      
+      console.log(`📅 Pass 2: ${dates.length} dates trouvées`)
+      
+      // Pass 3: Extraire les tags pour chaque article
+      const tagSections = html.split(/<h5[^>]*>/)
+      
+      // Combiner les données (max 6 articles)
+      const maxArticles = Math.min(articleLinks.length, dates.length, 6)
+      
+      for (let i = 0; i < maxArticles; i++) {
+        const article = articleLinks[i]
+        const date = dates[i] || currentDate?.toLocaleDateString('fr-FR') || ''
+        
+        // Chercher les tags dans la section correspondante
+        const tags: string[] = []
+        if (i < tagSections.length) {
+          const tagMatches = tagSections[i].match(/rel="tag">([^<]+)<\/a>/gi) || []
+          tagMatches.forEach(tagMatch => {
+            const tag = tagMatch.match(/rel="tag">([^<]+)<\/a>/i)
+            if (tag) tags.push(tag[1].trim())
+          })
+        }
+        
+        results.push({
+          title: article.title,
+          content: `Actualité ESILV du ${date}: ${article.title}. Consultez l'article complet pour plus de détails.`,
+          url: article.url.startsWith('http') ? article.url : `${this.baseUrl}${article.url}`,
+          confidence: 0.80,
+          date: date,
+          tags: tags.length > 0 ? tags : undefined
+        })
+        
+        console.log(`✅ Article ${i+1}: "${article.title.substring(0, 50)}..." (${date})`)
+        if (tags.length > 0) {
+          console.log(`   🏷️  Tags: ${tags.join(', ')}`)
+        }
+        console.log(`   🔗 URL: ${article.url}`)
+      }
+      
+      console.log(`📊 Total: ${results.length} actualités extraites avec succès`)
         
         // Extraire la date (jour, mois, année)
         const dateMatch = /<div class="date">(\d+)<\/div>[\s\S]*?<div class="month">(\w+)<\/div>[\s\S]*?<div class="year">(\d{4})<\/div>/i.exec(block)
@@ -303,44 +363,6 @@ class ESILVWebScraper {
         }
       }
       
-      if (results.length === 0) {
-        console.log('⚠️ Aucune actualité extraite avec la méthode principale, tentative alternative...')
-        
-        // Méthode alternative : rechercher tous les h5 avec dates
-        const h5Pattern = /<h5[^>]*><a[^>]*>([^<]+)<\/a><\/h5>/gi
-        const datePattern = /(\d{1,2})\s+(Jan|Fév|Mar|Avr|Mai|Juin|Juil|Août|Sep|Oct|Nov|Déc)\s+(\d{4})/gi
-        
-        const titles: string[] = []
-        const dates: string[] = []
-        
-        let h5Match
-        while ((h5Match = h5Pattern.exec(html)) !== null) {
-          const title = h5Match[1].trim()
-          if (title.length > 20) {
-            titles.push(title)
-          }
-        }
-        
-        let dateMatch
-        while ((dateMatch = datePattern.exec(html)) !== null) {
-          dates.push(`${dateMatch[1]} ${dateMatch[2]} ${dateMatch[3]}`)
-        }
-        
-        console.log(`📰 Méthode alternative: ${titles.length} titres, ${dates.length} dates`)
-        
-        const count = Math.min(titles.length, dates.length, 3)
-        for (let i = 0; i < count; i++) {
-          results.push({
-            title: titles[i],
-            content: `Actualité ESILV du ${dates[i]}: ${titles[i]}. Pour plus de détails, consultez https://www.esilv.fr/actus/`,
-            url: `${this.baseUrl}/actus/`,
-            confidence: 0.75,
-            date: dates[i]
-          })
-        }
-      }
-      
-      console.log(`📊 Total: ${results.length} actualités extraites avec succès`)
       
     } catch (error) {
       console.error('Error extracting news:', error)
