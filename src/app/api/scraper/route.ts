@@ -194,8 +194,8 @@ class ESILVWebScraper {
       }
       
       const html = await response.text()
-      const $ = cheerio.load(html)
       const rawHtml = html.substring(0, 12000) // Limiter la taille envoyée au LLM
+      const $ = cheerio.load(html)
       
       const contentParagraphs: string[] = []
       
@@ -376,6 +376,7 @@ class ESILVWebScraper {
       }
       
       const html = await response.text()
+      const rawHtml = html.substring(0, 12000) // Limiter la taille envoyée au LLM
       const $ = cheerio.load(html)
       
       // Extraire tous les paragraphes et headings pertinents
@@ -564,8 +565,7 @@ class ESILVWebScraper {
           answer: answer,
           category: category,
           confidence: result.confidence,
-          source: result.url,
-          lastVerified: new Date()
+          source: result.url
         }
       })
     } catch (error) {
