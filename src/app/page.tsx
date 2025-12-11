@@ -369,12 +369,13 @@ export default function EnhancedESILVChatbot() {
                         boxShadow: message.role === 'assistant' ? '0 10px 25px -5px rgba(0, 0, 0, 0.1)' : 'none'
                       }}
                     >
-                      {/* Feedback buttons - Only show on real messages (not initial welcome message) */}
-                      {message.role === 'assistant' && message.id !== '1' && (
+                      {/* Feedback buttons - Only show on completed messages (not streaming or initial message) */}
+                      {message.role === 'assistant' && message.id !== '1' && !message.isStreaming && (
                         <motion.div 
                           className="absolute -top-2 -right-2 flex gap-1 transition-all"
-                          initial={{ opacity: 1 }}
-                          animate={{ opacity: 1 }}
+                          initial={{ opacity: 0, scale: 0.8 }}
+                          animate={{ opacity: 1, scale: 1 }}
+                          transition={{ duration: 0.3, delay: 0.2 }}
                         >
                           <motion.button
                             whileHover={{ scale: 1.1 }}
