@@ -60,24 +60,36 @@ class ESILVWebScraper {
     const results: ScraperResult[] = []
     
     try {
-      // Tenter de scraper la vraie page actualités
-      const newsUrl = `${this.baseUrl}/actualites`
+      // URL correcte de la page actualités ESILV
+      const newsUrl = `${this.baseUrl}/actus/`
+      
+      console.log(`📰 Tentative de scraping: ${newsUrl}`)
       
       const response = await fetch(newsUrl, {
         headers: {
-          'User-Agent': 'Mozilla/5.0 (compatible; ESILVBot/1.0)',
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
         },
       })
       
       if (!response.ok) {
+        console.log(`⚠️ HTTP ${response.status}, passage au mock data`)
         throw new Error(`HTTP error! status: ${response.status}`)
       }
       
       const html = await response.text()
+      console.log(`✅ Page chargée (${html.length} caractères)`)
       
       // Extraire les actualités (titres, dates, contenu)
       const newsItems = this.extractNewsFromHTML(html, currentDate)
-      results.push(...newsItems)
+      
+      if (newsItems.length > 0) {
+        console.log(`📰 ${newsItems.length} actualités extraites`)
+        results.push(...newsItems)
+      } else {
+        console.log('⚠️ Aucune actualité extraite')
+        throw new Error('No news extracted')
+      }
       
     } catch (error) {
       console.error('Real news scraping failed:', error)
