@@ -372,13 +372,15 @@ class ChatOrchestrator {
     try {
       console.log('🌐 Appel du scraper web pour:', query)
       
-      // Appeler l'API scraper avec la date
+      // Appeler l'API scraper avec la date et deep scraping activé
       const response = await fetch('http://localhost:3000/api/scraper', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
           query,
-          currentDate: currentDate?.toISOString()
+          currentDate: currentDate?.toISOString(),
+          deepScrape: true,  // Activer le deep scraping
+          autoSave: false    // Ne pas sauvegarder automatiquement, l'orchestrateur décidera
         })
       })
 
@@ -390,16 +392,24 @@ class ChatOrchestrator {
       const data = await response.json()
       
       if (data.results && data.results.length > 0) {
-        console.log(`✅ Scraper a trouvé ${data.results.length} résultats`)
+        console.log(`✅ Scraper a trouvé ${data.results.length} résultats (deep scraping)`)
         
-        // Formater les résultats pour le prompt avec dates si disponibles
+        // Décider si les données doivent être ajoutées au RAG
+        await this.evaluateAndSaveToRAG(data.results, query)
+        
+        // Formater les résultats pour le prompt avec dates et contenu complet
         const formattedResults = data.results
           .map((r: any) => {
             let result = `📰 Source: ${r.url}\n📌 Titre: ${r.title}`
             if (r.date) {
               result += `\n📅 Date: ${r.date}`
             }
-            result += `\n📄 Contenu: ${r.content}`
+            if (r.tags && r.tags.length > 0) {
+              result += `\n🏷️  Tags: ${r.tags.join(', ')}`
+            }
+            // Utiliser le contenu complet si disponible
+            const content = r.fullContent || r.content
+            result += `\n📄 Contenu: ${content}`
             return result
           })
           .join('\n\n')
@@ -412,6 +422,55 @@ class ChatOrchestrator {
     } catch (error) {
       console.error('Error searching web:', error)
       return ''
+    }
+  }
+
+  private async evaluateAndSaveToRAG(scrapedResults: any[], query: string): Promise<void> {
+    try {
+      console.log('\n🤖 Orchestrateur évalue les données scrapées...')
+      
+      for (const result of scrapedResults) {
+        // Vérifier si l'information existe déjà dans le RAG
+        const existing = await db.knowledgeBase.findFirst({
+          where: {
+            OR: [
+              { question: { contains: result.title } },
+              { answer: { contains: result.title } }
+            ]
+          }
+        })
+        
+        if (!existing) {
+          // Information nouvelle et pertinente → Sauvegarder dans le RAG
+          const contentToSave = result.fullContent || result.content
+          const question = `${result.title} (${result.date || 'Date inconnue'})`
+          
+          let answer = contentToSave
+          if (result.tags && result.tags.length > 0) {
+            answer += `\n\nTags: ${result.tags.join(', ')}`
+          }
+          answer += `\n\nSource: ${result.url}`
+          
+          await db.knowledgeBase.create({
+            data: {
+              question: question,
+              answer: answer,
+              category: 'actualités_scrapées',
+              confidence: result.confidence || 0.90,
+              source: result.url
+            }
+          })
+          
+          console.log(`  ✅ Ajouté au RAG: "${result.title.substring(0, 50)}..."`)
+        } else {
+          console.log(`  ⏭️  Déjà dans RAG: "${result.title.substring(0, 50)}..."`)
+        }
+      }
+      
+      console.log('✅ Évaluation terminée\n')
+      
+    } catch (error) {
+      console.error('Error evaluating scraped data:', error)
     }
   }
 }

@@ -7,12 +7,15 @@ interface ScraperResult {
   url: string
   confidence: number
   date?: string  // Date de publication de l'actualité
+  fullContent?: string  // Contenu complet de la page
+  category?: string  // Catégorie de l'actualité
+  tags?: string[]  // Tags/étiquettes
 }
 
 class ESILVWebScraper {
   private readonly baseUrl = 'https://www.esilv.fr'
   
-  async scrapeESILVInfo(query: string, currentDate?: Date): Promise<ScraperResult[]> {
+  async scrapeESILVInfo(query: string, currentDate?: Date, deepScrape: boolean = true): Promise<ScraperResult[]> {
     const results: ScraperResult[] = []
     
     // Détecter si c'est une question sur l'actualité
@@ -22,7 +25,7 @@ class ESILVWebScraper {
       if (isNewsQuery) {
         // Pour les actualités, scraper la page actualités
         console.log('📰 Scraping page actualités ESILV...')
-        const newsResults = await this.scrapeNewsPage(currentDate)
+        const newsResults = await this.scrapeNewsPage(currentDate, deepScrape)
         if (newsResults.length > 0) {
           results.push(...newsResults)
         } else {
@@ -56,14 +59,14 @@ class ESILVWebScraper {
     return results
   }
 
-  private async scrapeNewsPage(currentDate?: Date): Promise<ScraperResult[]> {
+  private async scrapeNewsPage(currentDate?: Date, deepScrape: boolean = true): Promise<ScraperResult[]> {
     const results: ScraperResult[] = []
     
     try {
       // URL correcte de la page actualités ESILV
       const newsUrl = `${this.baseUrl}/actus/`
       
-      console.log(`📰 Tentative de scraping: ${newsUrl}`)
+      console.log(`📰 Étape 1: Scraping liste actualités: ${newsUrl}`)
       
       const response = await fetch(newsUrl, {
         headers: {
@@ -78,24 +81,119 @@ class ESILVWebScraper {
       }
       
       const html = await response.text()
-      console.log(`✅ Page chargée (${html.length} caractères)`)
+      console.log(`✅ Page liste chargée (${html.length} caractères)`)
       
-      // Extraire les actualités (titres, dates, contenu)
+      // Extraire les actualités (titres, dates, URLs)
       const newsItems = this.extractNewsFromHTML(html, currentDate)
       
-      if (newsItems.length > 0) {
-        console.log(`📰 ${newsItems.length} actualités extraites`)
-        results.push(...newsItems)
-      } else {
+      if (newsItems.length === 0) {
         console.log('⚠️ Aucune actualité extraite')
         throw new Error('No news extracted')
       }
+      
+      console.log(`📰 ${newsItems.length} actualités extraites`)
+      
+      // Étape 2 : Deep scraping - Visiter chaque page d'actualité pour le contenu complet
+      if (deepScrape) {
+        console.log(`\n🔬 Étape 2: Deep scraping de ${newsItems.length} articles...`)
+        
+        for (let i = 0; i < newsItems.length; i++) {
+          const item = newsItems[i]
+          
+          try {
+            console.log(`  📄 Article ${i+1}/${newsItems.length}: ${item.title.substring(0, 50)}...`)
+            
+            // Extraire l'URL de l'article depuis le lien
+            const fullContent = await this.scrapeArticlePage(item.url)
+            
+            if (fullContent) {
+              item.fullContent = fullContent
+              item.content = fullContent.substring(0, 500) + '...' // Résumé
+              item.confidence = 0.95 // Confiance plus élevée car contenu complet
+              console.log(`    ✅ Contenu récupéré (${fullContent.length} caractères)`)
+            } else {
+              console.log(`    ⚠️ Contenu non récupéré, utilisation de l'extrait`)
+            }
+            
+            // Délai entre chaque requête pour éviter de surcharger le serveur
+            await new Promise(resolve => setTimeout(resolve, 500))
+            
+          } catch (error) {
+            console.log(`    ❌ Erreur: ${error}`)
+            // Garder l'extrait initial si le deep scraping échoue
+          }
+        }
+        
+        console.log(`✅ Deep scraping terminé\n`)
+      }
+      
+      results.push(...newsItems)
       
     } catch (error) {
       console.error('Real news scraping failed:', error)
     }
     
     return results
+  }
+
+  private async scrapeArticlePage(articleUrl: string): Promise<string> {
+    try {
+      const response = await fetch(articleUrl, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        },
+      })
+      
+      if (!response.ok) {
+        return ''
+      }
+      
+      const html = await response.text()
+      
+      // Extraire le contenu principal de l'article
+      // Sur ESILV, le contenu est dans des balises <p> dans le corps de l'article
+      
+      // Méthode 1 : Chercher le contenu entre les balises spécifiques
+      let content = ''
+      
+      // Extraire tous les paragraphes
+      const paragraphRegex = /<p[^>]*>([\s\S]*?)<\/p>/gi
+      const paragraphs: string[] = []
+      let match
+      
+      while ((match = paragraphRegex.exec(html)) !== null) {
+        const cleanParagraph = match[1]
+          .replace(/<[^>]+>/g, '') // Enlever les tags HTML
+          .replace(/&nbsp;/g, ' ')
+          .replace(/&amp;/g, '&')
+          .replace(/&quot;/g, '"')
+          .replace(/&#039;/g, "'")
+          .replace(/&lt;/g, '<')
+          .replace(/&gt;/g, '>')
+          .replace(/\s+/g, ' ')
+          .trim()
+        
+        // Garder les paragraphes de plus de 50 caractères (filtre le bruit)
+        if (cleanParagraph.length > 50) {
+          paragraphs.push(cleanParagraph)
+        }
+      }
+      
+      // Prendre les 5 premiers paragraphes significatifs
+      content = paragraphs.slice(0, 5).join(' ')
+      
+      // Limiter à 1500 caractères pour le prompt
+      if (content.length > 1500) {
+        content = content.substring(0, 1500) + '...'
+      }
+      
+      return content
+      
+    } catch (error) {
+      console.error(`Error scraping article page: ${error}`)
+      return ''
+    }
   }
 
   private extractNewsFromHTML(html: string, currentDate?: Date): ScraperResult[] {
@@ -140,6 +238,10 @@ class ESILVWebScraper {
                        .trim()
         }
         
+        // Extraire l'URL de l'article
+        const urlMatch = /<a href="([^"]+)"[^>]*>/i.exec(block)
+        const articleUrl = urlMatch ? urlMatch[1] : `${this.baseUrl}/actus/`
+        
         // Extraire un extrait du contenu depuis <div class="post_excerpt">
         const excerptMatch = /<div class="post_excerpt[^"]*">[\s\S]*?<p>([^<]+)<\/p>/i.exec(block)
         let excerpt = ''
@@ -154,6 +256,20 @@ class ESILVWebScraper {
             .substring(0, 200)
         }
         
+        // Extraire les tags/étiquettes
+        const tagsMatch = /Étiquettes&nbsp;:([^<]*)/i.exec(block)
+        const tags: string[] = []
+        
+        if (tagsMatch) {
+          const tagLinks = tagsMatch[1].match(/rel="tag">([^<]+)<\/a>/gi) || []
+          tagLinks.forEach(tagLink => {
+            const tag = tagLink.match(/rel="tag">([^<]+)<\/a>/i)
+            if (tag) {
+              tags.push(tag[1].trim())
+            }
+          })
+        }
+        
         // Filtrer les titres génériques ou trop courts
         const isGeneric = /^(en savoir plus|demandez|nos brochures|contactez|télécharger|événement)/i.test(title)
         
@@ -161,12 +277,16 @@ class ESILVWebScraper {
           results.push({
             title: title,
             content: excerpt || `Actualité ESILV du ${newsDate}: ${title}. Pour plus de détails, consultez le site officiel de l'ESILV.`,
-            url: `${this.baseUrl}/actus/`,
-            confidence: 0.90,
-            date: newsDate
+            url: articleUrl,
+            confidence: 0.80, // Sera augmenté à 0.95 après deep scraping
+            date: newsDate,
+            tags: tags.length > 0 ? tags : undefined
           })
           newsExtracted++
           console.log(`✅ Actualité ${newsExtracted}: "${title.substring(0, 50)}..." (${newsDate})`)
+          if (tags.length > 0) {
+            console.log(`   🏷️  Tags: ${tags.join(', ')}`)
+          }
         }
       }
       
@@ -345,10 +465,25 @@ class ESILVWebScraper {
   
   async saveToKnowledgeBase(result: ScraperResult, category: string = 'scraped'): Promise<void> {
     try {
+      // Utiliser le contenu complet si disponible, sinon l'extrait
+      const contentToSave = result.fullContent || result.content
+      
+      // Créer une question formatée
+      const question = `${result.title} (${result.date || 'Date inconnue'})`
+      
+      // Créer une réponse formatée avec toutes les infos
+      let answer = contentToSave
+      
+      if (result.tags && result.tags.length > 0) {
+        answer += `\n\nTags: ${result.tags.join(', ')}`
+      }
+      
+      answer += `\n\nSource: ${result.url}`
+      
       await db.knowledgeBase.create({
         data: {
-          question: result.title,
-          answer: result.content,
+          question: question,
+          answer: answer,
           category: category,
           confidence: result.confidence,
           source: result.url
@@ -362,7 +497,7 @@ class ESILVWebScraper {
 
 export async function POST(request: NextRequest) {
   try {
-    const { query, autoSave = false, currentDate } = await request.json()
+    const { query, autoSave = false, currentDate, deepScrape = true } = await request.json()
     
     if (!query) {
       return NextResponse.json(
@@ -372,28 +507,60 @@ export async function POST(request: NextRequest) {
     }
     
     const date = currentDate ? new Date(currentDate) : new Date()
-    console.log(`🔍 Scraper POST: Recherche pour "${query}" (Date: ${date.toLocaleDateString('fr-FR')})`)
+    console.log(`\n${'='.repeat(60)}`)
+    console.log(`🔍 SCRAPER POST: "${query}"`)
+    console.log(`📅 Date: ${date.toLocaleDateString('fr-FR')}`)
+    console.log(`🔬 Deep Scraping: ${deepScrape ? 'Activé' : 'Désactivé'}`)
+    console.log('='.repeat(60) + '\n')
     
     const scraper = new ESILVWebScraper()
-    const results = await scraper.scrapeESILVInfo(query, date)
+    const results = await scraper.scrapeESILVInfo(query, date, deepScrape)
     
-    console.log(`✅ Scraper: ${results.length} résultats trouvés`)
+    console.log(`\n${'='.repeat(60)}`)
+    console.log(`✅ RÉSULTATS: ${results.length} actualités trouvées`)
     if (results.length > 0 && results[0].date) {
-      console.log(`📅 Dates des actualités: ${results.map(r => r.date).filter(Boolean).join(', ')}`)
+      console.log(`📅 Dates: ${results.map(r => r.date).filter(Boolean).join(', ')}`)
     }
+    
+    // Vérifier si les actualités existent déjà dans le RAG
+    let newArticles = 0
+    let existingArticles = 0
     
     if (autoSave) {
-      // Save results to knowledge base
+      console.log('\n💾 Sauvegarde dans le RAG...')
+      
       for (const result of results) {
-        await scraper.saveToKnowledgeBase(result, 'web_scraped')
+        // Vérifier si l'article existe déjà
+        const existing = await db.knowledgeBase.findFirst({
+          where: {
+            OR: [
+              { question: { contains: result.title } },
+              { answer: { contains: result.title } }
+            ]
+          }
+        })
+        
+        if (!existing) {
+          await scraper.saveToKnowledgeBase(result, 'web_scraped')
+          newArticles++
+          console.log(`  ✅ Nouveau: "${result.title.substring(0, 50)}..."`)
+        } else {
+          existingArticles++
+          console.log(`  ⏭️  Existe déjà: "${result.title.substring(0, 50)}..."`)
+        }
       }
+      
+      console.log(`\n📊 Sauvegarde: ${newArticles} nouveaux, ${existingArticles} existants`)
     }
+    console.log('='.repeat(60) + '\n')
     
     return NextResponse.json({
       success: true,
       results,
       count: results.length,
-      savedToKB: autoSave
+      savedToKB: autoSave,
+      newArticles: autoSave ? newArticles : undefined,
+      existingArticles: autoSave ? existingArticles : undefined
     })
   } catch (error) {
     console.error('Scraper API error:', error)
