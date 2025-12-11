@@ -93,11 +93,31 @@ class ChatOrchestrator {
       .map(msg => `${msg.role}: ${msg.content}`)
       .join('\n')
 
-    // Search knowledge base with enhanced matching
-    const { results: knowledgeResults, sources } = await this.searchKnowledgeBase(message)
+    // Détecter si la question nécessite des informations récentes/actuelles
+    const needsRecentInfo = /\b(dernier|dernière|derniers|dernières|récent|récente|récents|récentes|nouveau|nouvelle|nouveaux|nouvelles|actualité|actualités|news|à jour|mise à jour|changement|modification)\b/i.test(message)
     
-    // Also search web for latest ESILV information
-    const webResults = await this.searchWebESILV(message)
+    let knowledgeResults = ''
+    let sources: any[] = []
+    let webResults = ''
+
+    if (needsRecentInfo) {
+      // Pour les questions sur l'actualité, privilégier le scraper web
+      console.log('🌐 Question sur actualités détectée → Priorité au scraper web')
+      webResults = await this.searchWebESILV(message)
+      
+      // Chercher aussi dans le RAG comme complément
+      const ragData = await this.searchKnowledgeBase(message)
+      knowledgeResults = ragData.results
+      sources = ragData.sources
+    } else {
+      // Pour les questions générales, priorité au RAG
+      const ragData = await this.searchKnowledgeBase(message)
+      knowledgeResults = ragData.results
+      sources = ragData.sources
+      
+      // Scraper en complément
+      webResults = await this.searchWebESILV(message)
+    }
     
     const prompt = `
     ⚠️ INSTRUCTION CRITIQUE : TU DOIS RÉPONDRE UNIQUEMENT EN FRANÇAIS. Ne réponds jamais en anglais, même si le contexte contient de l'anglais.
@@ -128,8 +148,13 @@ class ChatOrchestrator {
     `
 
     try {
-      console.log('\n🔍 RECHERCHE RAG - Résultats trouvés:')
-      console.log(knowledgeResults.substring(0, 300) + '...\n')
+      if (needsRecentInfo && webResults) {
+        console.log('\n🌐 SCRAPER WEB - Résultats trouvés:')
+        console.log(webResults.substring(0, 300) + '...\n')
+      } else {
+        console.log('\n🔍 RECHERCHE RAG - Résultats trouvés:')
+        console.log(knowledgeResults.substring(0, 300) + '...\n')
+      }
       
       const response = await this.aiOrchestrator.generateCompletion(prompt, conversationHistory)
       return {
