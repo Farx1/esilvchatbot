@@ -194,3 +194,35 @@ export async function GET() {
   })
 }
 
+export async function POST(request: NextRequest) {
+  try {
+    const { query } = await request.json()
+
+    if (!query) {
+      return NextResponse.json(
+        { error: 'Query is required' },
+        { status: 400 }
+      )
+    }
+
+    console.log(`🔍 Scraper POST: Recherche pour "${query}"`)
+
+    const scraper = new ESILVWebScraper()
+    const results = await scraper.scrapeESILVInfo(query)
+
+    console.log(`✅ Scraper: ${results.length} résultats trouvés`)
+
+    return NextResponse.json({
+      success: true,
+      results,
+      count: results.length
+    })
+  } catch (error) {
+    console.error('Scraper API error:', error)
+    return NextResponse.json(
+      { error: 'Internal server error' },
+      { status: 500 }
+    )
+  }
+}
+
