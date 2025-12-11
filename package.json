@@ -20,8 +20,7 @@
     "kb:check": "node scripts/kb-manager.js check",
     "kb:seed": "node scripts/kb-manager.js seed",
     "kb:stats": "node scripts/kb-manager.js stats",
-    "kb:seed-esilv": "node scripts/seed-esilv-complete-v2.js",
-    "mcp:list": "node scripts/mcp-info.js"
+    "kb:seed-esilv": "node scripts/seed-esilv-complete-v2.js"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
