@@ -102,28 +102,52 @@ class ESILVWebScraper {
     const results: ScraperResult[] = []
     
     try {
-      // Simple extraction de balises h2/h3 pour les titres
-      const titleRegex = /<h[23][^>]*>(.*?)<\/h[23]>/gi
-      const titles = []
+      // Recherche des patterns d'actualités sur la page /actus/
+      // Format: <date> puis <h5> avec le titre, puis description
+      
+      // Pattern 1: Dates au format "10 Déc 2025"
+      const datePattern = /(\d{1,2}\s+(?:Jan|Fév|Mar|Avr|Mai|Juin|Juil|Août|Sep|Oct|Nov|Déc)\s+\d{4})/gi
+      const dates = html.match(datePattern) || []
+      
+      console.log(`📅 ${dates.length} dates trouvées dans la page`)
+      
+      // Pattern 2: Titres h5 (format utilisé sur /actus/)
+      const h5Regex = /<h5[^>]*>(.*?)<\/h5>/gi
+      const titles: string[] = []
       let match
       
-      while ((match = titleRegex.exec(html)) !== null) {
-        const cleanTitle = match[1].replace(/<[^>]+>/g, '').trim()
-        if (cleanTitle.length > 10) {
+      while ((match = h5Regex.exec(html)) !== null) {
+        const cleanTitle = match[1]
+          .replace(/<[^>]+>/g, '') // Enlever les tags HTML
+          .replace(/&[a-z]+;/gi, ' ') // Enlever les entités HTML
+          .trim()
+        
+        // Filtrer les titres génériques (boutons, formulaires, etc.)
+        const isGeneric = /^(en savoir plus|demandez|nos brochures|contactez|télécharger)/i.test(cleanTitle)
+        
+        if (cleanTitle.length > 20 && !isGeneric) {
           titles.push(cleanTitle)
         }
       }
       
-      // Prendre les 3 premiers titres comme actualités
-      titles.slice(0, 3).forEach(title => {
+      console.log(`📰 ${titles.length} titres d'actualités trouvés`)
+      
+      // Associer dates et titres
+      const newsCount = Math.min(titles.length, 3) // Maximum 3 actualités
+      
+      for (let i = 0; i < newsCount; i++) {
+        const newsDate = dates[i] || currentDate?.toLocaleDateString('fr-FR')
+        
         results.push({
-          title: title,
-          content: `Actualité récente de l'ESILV: ${title}. Pour plus de détails, consultez le site officiel.`,
-          url: `${this.baseUrl}/actualites`,
-          confidence: 0.70,
-          date: currentDate?.toLocaleDateString('fr-FR')
+          title: titles[i],
+          content: `Actualité ESILV du ${newsDate}: ${titles[i]}. Cette information provient directement du site officiel de l'ESILV. Pour plus de détails, consultez https://www.esilv.fr/actus/`,
+          url: `${this.baseUrl}/actus/`,
+          confidence: 0.85,
+          date: newsDate
         })
-      })
+      }
+      
+      console.log(`✅ ${results.length} actualités formatées`)
       
     } catch (error) {
       console.error('Error extracting news:', error)
