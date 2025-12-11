@@ -110,22 +110,26 @@ class ChatOrchestrator {
     let webResults = ''
 
     if (needsRecentInfo) {
-      // Pour les questions sur l'actualité, privilégier le scraper web
-      console.log(`🌐 Question sur actualités détectée (${dateStr}) → Priorité au scraper web`)
+      // Pour les questions sur l'actualité, FORCER le scraper (ignore RAG)
+      console.log(`🌐 Question sur actualités détectée (${dateStr}) → FORCE scraper web (ignore RAG)`)
       webResults = await this.searchWebESILV(message, currentDate)
       
-      // Chercher aussi dans le RAG comme complément
-      const ragData = await this.searchKnowledgeBase(message)
-      knowledgeResults = ragData.results
-      sources = ragData.sources
+      // NE PAS interroger le RAG pour les actualités
+      knowledgeResults = ''
+      sources = []
+      
+      console.log('✅ Scraper activé en mode exclusif pour actualités')
     } else {
       // Pour les questions générales, priorité au RAG
       const ragData = await this.searchKnowledgeBase(message)
       knowledgeResults = ragData.results
       sources = ragData.sources
       
-      // Scraper en complément
-      webResults = await this.searchWebESILV(message, currentDate)
+      // Si RAG vide, activer le scraper en fallback
+      if (!knowledgeResults || knowledgeResults.trim() === '') {
+        console.log('📭 RAG vide → Activation du scraper web')
+        webResults = await this.searchWebESILV(message, currentDate)
+      }
     }
     
     const prompt = `
@@ -141,23 +145,23 @@ class ChatOrchestrator {
     
     QUESTION UTILISATEUR: "${message}"
     
-    INFORMATIONS DE LA BASE DE CONNAISSANCES ESILV:
-    ${knowledgeResults}
+    ${needsRecentInfo ? '🔴 QUESTION SUR LES ACTUALITÉS - UTILISE UNIQUEMENT LES RÉSULTATS WEB CI-DESSOUS' : 'INFORMATIONS DE LA BASE DE CONNAISSANCES ESILV:'}
+    ${needsRecentInfo ? '' : knowledgeResults}
     
-    RÉSULTATS DE RECHERCHE WEB ESILV (données en temps réel du site):
+    RÉSULTATS DE RECHERCHE WEB ESILV (ACTUALITÉS EN TEMPS RÉEL):
     ${webResults}
     
     INSTRUCTIONS IMPORTANTES:
     1. ⚠️ RÉPONDS UNIQUEMENT EN FRANÇAIS - C'est une règle absolue
-    2. ${needsRecentInfo ? '🌐 PRIORITÉ AUX RÉSULTATS WEB (plus récents et actuels)' : 'Utilise les informations les plus précises disponibles'}
-    3. Si les informations ont des dates, mentionne-les pour contextualiser
-    4. Pour les questions sur l'actualité, cite les dates et sources des informations
+    2. ${needsRecentInfo ? '🔴 POUR LES ACTUALITÉS: Utilise UNIQUEMENT les résultats web ci-dessus. Cite les titres EXACTS, dates et sources.' : 'Utilise les informations les plus précises disponibles'}
+    3. ${needsRecentInfo ? 'Cite TOUJOURS les dates des actualités (ex: "10 Déc 2025")' : 'Si les informations ont des dates, mentionne-les'}
+    4. ${needsRecentInfo ? 'Mentionne les tags/catégories si fournis (ex: hackathon, cybersécurité)' : 'Pour les questions sur l\'actualité, cite les dates et sources'}
     5. Sois cohérent avec les réponses précédentes
-    6. Pour les majeures, utilise les informations mises à jour
-    7. Si tu n'as pas d'information spécifique, sois honnête et propose des alternatives
-    8. Structure ta réponse de manière claire avec des listes ou des paragraphes bien organisés
-    9. Termine par une question ouverte pour encourager la conversation
-    10. Adapte ton ton au contexte (étudiant potentiel, parent, professionnel, etc.)
+    6. Structure ta réponse de manière claire avec des listes ou des paragraphes bien organisés
+    7. ${needsRecentInfo ? 'Cite les sources en fin de réponse (ex: "Source: https://www.esilv.fr/...")' : 'Si tu n\'as pas d\'information spécifique, sois honnête'}
+    8. Termine par une question ouverte pour encourager la conversation
+    9. Adapte ton ton au contexte (étudiant potentiel, parent, professionnel, etc.)
+    ${needsRecentInfo ? '10. 🔴 NE PAS inventer d\'actualités - utilise UNIQUEMENT celles fournies par le scraper web' : ''}
     `
 
     try {
