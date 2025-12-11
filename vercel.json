@@ -1,0 +1,22 @@
+{
+  "version": 2,
+  "buildCommand": "npm run build",
+  "devCommand": "npm run dev",
+  "installCommand": "npm install",
+  "framework": "nextjs",
+  "regions": ["cdg1"],
+  "env": {
+    "DATABASE_URL": "@database_url",
+    "AI_PROVIDER": "@ai_provider",
+    "ADMIN_PASSWORD": "@admin_password",
+    "NEXTAUTH_SECRET": "@nextauth_secret",
+    "NEXTAUTH_URL": "@nextauth_url",
+    "SESSION_SECRET": "@session_secret"
+  },
+  "build": {
+    "env": {
+      "DATABASE_URL": "file:./prisma/db/esilv.db"
+    }
+  }
+}
+
