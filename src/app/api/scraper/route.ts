@@ -151,40 +151,19 @@ class ESILVWebScraper {
       }
       
       const html = await response.text()
+      const $ = cheerio.load(html)
       
-      // Extraire le contenu principal de l'article
-      // Sur ESILV, le contenu est dans des balises <p> dans le corps de l'article
+      const contentParagraphs: string[] = []
       
-      // Méthode 1 : Chercher le contenu entre les balises spécifiques
-      let content = ''
-      
-      // Extraire tous les paragraphes
-      const paragraphRegex = /<p[^>]*>([\s\S]*?)<\/p>/gi
-      const paragraphs: string[] = []
-      let match
-      
-      while ((match = paragraphRegex.exec(html)) !== null) {
-        const cleanParagraph = match[1]
-          .replace(/<[^>]+>/g, '') // Enlever les tags HTML
-          .replace(/&nbsp;/g, ' ')
-          .replace(/&amp;/g, '&')
-          .replace(/&quot;/g, '"')
-          .replace(/&#039;/g, "'")
-          .replace(/&lt;/g, '<')
-          .replace(/&gt;/g, '>')
-          .replace(/\s+/g, ' ')
-          .trim()
-        
-        // Garder les paragraphes de plus de 50 caractères (filtre le bruit)
-        if (cleanParagraph.length > 50) {
-          paragraphs.push(cleanParagraph)
+      // Target common content containers for ESILV article structure
+      $('.post_content p, .post_content li').each((i, el) => {
+        const text = $(el).text().trim()
+        if (text && text.length > 50) { // Filter short/irrelevant paragraphs
+          contentParagraphs.push(text)
         }
-      }
+      })
       
-      // Prendre les 5 premiers paragraphes significatifs
-      content = paragraphs.slice(0, 5).join(' ')
-      
-      // Limiter à 1500 caractères pour le prompt
+      let content = contentParagraphs.slice(0, 5).join(' ') // Take top 5 paragraphs
       if (content.length > 1500) {
         content = content.substring(0, 1500) + '...'
       }
