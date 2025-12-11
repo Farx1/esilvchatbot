@@ -102,52 +102,112 @@ class ESILVWebScraper {
     const results: ScraperResult[] = []
     
     try {
-      // Recherche des patterns d'actualités sur la page /actus/
-      // Format: <date> puis <h5> avec le titre, puis description
+      console.log('🔍 Extraction des actualités depuis la structure ESILV...')
       
-      // Pattern 1: Dates au format "10 Déc 2025"
-      const datePattern = /(\d{1,2}\s+(?:Jan|Fév|Mar|Avr|Mai|Juin|Juil|Août|Sep|Oct|Nov|Déc)\s+\d{4})/gi
-      const dates = html.match(datePattern) || []
+      // Structure ESILV spécifique : <div class="post_wrapper one_third">
+      // Avec <div class="post_date"> pour la date et <h5><a> pour le titre
       
-      console.log(`📅 ${dates.length} dates trouvées dans la page`)
+      // Pattern pour extraire les blocs d'actualités complets
+      const postBlockPattern = /<div class="post_wrapper[^"]*">([\s\S]*?)<\/div>\s*<\/div>\s*(?:<br class="clear">)?/gi
+      let blockMatch
+      let newsExtracted = 0
       
-      // Pattern 2: Titres h5 (format utilisé sur /actus/)
-      const h5Regex = /<h5[^>]*>(.*?)<\/h5>/gi
-      const titles: string[] = []
-      let match
-      
-      while ((match = h5Regex.exec(html)) !== null) {
-        const cleanTitle = match[1]
-          .replace(/<[^>]+>/g, '') // Enlever les tags HTML
-          .replace(/&[a-z]+;/gi, ' ') // Enlever les entités HTML
-          .trim()
+      while ((blockMatch = postBlockPattern.exec(html)) !== null && newsExtracted < 5) {
+        const block = blockMatch[1]
         
-        // Filtrer les titres génériques (boutons, formulaires, etc.)
-        const isGeneric = /^(en savoir plus|demandez|nos brochures|contactez|télécharger)/i.test(cleanTitle)
+        // Extraire la date (jour, mois, année)
+        const dateMatch = /<div class="date">(\d+)<\/div>[\s\S]*?<div class="month">(\w+)<\/div>[\s\S]*?<div class="year">(\d{4})<\/div>/i.exec(block)
+        let newsDate = currentDate?.toLocaleDateString('fr-FR') || ''
         
-        if (cleanTitle.length > 20 && !isGeneric) {
-          titles.push(cleanTitle)
+        if (dateMatch) {
+          const day = dateMatch[1]
+          const month = dateMatch[2]
+          const year = dateMatch[3]
+          newsDate = `${day} ${month} ${year}`
+        }
+        
+        // Extraire le titre depuis <h5><a>
+        const titleMatch = /<h5[^>]*><a[^>]*title="([^"]*)"[^>]*>([^<]+)/i.exec(block)
+        let title = ''
+        
+        if (titleMatch) {
+          title = (titleMatch[1] || titleMatch[2]).trim()
+          // Nettoyer le titre
+          title = title.replace(/&quot;/g, '"')
+                       .replace(/&#039;/g, "'")
+                       .replace(/&amp;/g, '&')
+                       .replace(/\s+/g, ' ')
+                       .trim()
+        }
+        
+        // Extraire un extrait du contenu depuis <div class="post_excerpt">
+        const excerptMatch = /<div class="post_excerpt[^"]*">[\s\S]*?<p>([^<]+)<\/p>/i.exec(block)
+        let excerpt = ''
+        
+        if (excerptMatch) {
+          excerpt = excerptMatch[1]
+            .replace(/&nbsp;/g, ' ')
+            .replace(/&amp;/g, '&')
+            .replace(/&quot;/g, '"')
+            .replace(/\s+/g, ' ')
+            .trim()
+            .substring(0, 200)
+        }
+        
+        // Filtrer les titres génériques ou trop courts
+        const isGeneric = /^(en savoir plus|demandez|nos brochures|contactez|télécharger|événement)/i.test(title)
+        
+        if (title && title.length > 20 && !isGeneric) {
+          results.push({
+            title: title,
+            content: excerpt || `Actualité ESILV du ${newsDate}: ${title}. Pour plus de détails, consultez le site officiel de l'ESILV.`,
+            url: `${this.baseUrl}/actus/`,
+            confidence: 0.90,
+            date: newsDate
+          })
+          newsExtracted++
+          console.log(`✅ Actualité ${newsExtracted}: "${title.substring(0, 50)}..." (${newsDate})`)
         }
       }
       
-      console.log(`📰 ${titles.length} titres d'actualités trouvés`)
-      
-      // Associer dates et titres
-      const newsCount = Math.min(titles.length, 3) // Maximum 3 actualités
-      
-      for (let i = 0; i < newsCount; i++) {
-        const newsDate = dates[i] || currentDate?.toLocaleDateString('fr-FR')
+      if (results.length === 0) {
+        console.log('⚠️ Aucune actualité extraite avec la méthode principale, tentative alternative...')
         
-        results.push({
-          title: titles[i],
-          content: `Actualité ESILV du ${newsDate}: ${titles[i]}. Cette information provient directement du site officiel de l'ESILV. Pour plus de détails, consultez https://www.esilv.fr/actus/`,
-          url: `${this.baseUrl}/actus/`,
-          confidence: 0.85,
-          date: newsDate
-        })
+        // Méthode alternative : rechercher tous les h5 avec dates
+        const h5Pattern = /<h5[^>]*><a[^>]*>([^<]+)<\/a><\/h5>/gi
+        const datePattern = /(\d{1,2})\s+(Jan|Fév|Mar|Avr|Mai|Juin|Juil|Août|Sep|Oct|Nov|Déc)\s+(\d{4})/gi
+        
+        const titles: string[] = []
+        const dates: string[] = []
+        
+        let h5Match
+        while ((h5Match = h5Pattern.exec(html)) !== null) {
+          const title = h5Match[1].trim()
+          if (title.length > 20) {
+            titles.push(title)
+          }
+        }
+        
+        let dateMatch
+        while ((dateMatch = datePattern.exec(html)) !== null) {
+          dates.push(`${dateMatch[1]} ${dateMatch[2]} ${dateMatch[3]}`)
+        }
+        
+        console.log(`📰 Méthode alternative: ${titles.length} titres, ${dates.length} dates`)
+        
+        const count = Math.min(titles.length, dates.length, 3)
+        for (let i = 0; i < count; i++) {
+          results.push({
+            title: titles[i],
+            content: `Actualité ESILV du ${dates[i]}: ${titles[i]}. Pour plus de détails, consultez https://www.esilv.fr/actus/`,
+            url: `${this.baseUrl}/actus/`,
+            confidence: 0.75,
+            date: dates[i]
+          })
+        }
       }
       
-      console.log(`✅ ${results.length} actualités formatées`)
+      console.log(`📊 Total: ${results.length} actualités extraites avec succès`)
       
     } catch (error) {
       console.error('Error extracting news:', error)
