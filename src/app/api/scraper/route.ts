@@ -200,13 +200,13 @@ class ESILVWebScraper {
     const results: ScraperResult[] = []
     
     try {
-      console.log('🔍 Extraction JSDOM des actualités ESILV...')
+      console.log('🔍 Extraction JSDOM (structure HTML exacte ESILV)...')
       
       const dom = new JSDOM(html)
       const document = dom.window.document
       
-      // Cibler les blocs d'actualités : <div class="post_wrapper one_third">
-      const postWrappers = document.querySelectorAll('.post_wrapper.one_third')
+      // STRUCTURE RÉELLE : <div class="post_wrapper one_third"> ou <div class="post_wrapper one_third last">
+      const postWrappers = document.querySelectorAll('.post_wrapper')
       console.log(`📦 ${postWrappers.length} blocs post_wrapper trouvés`)
       
       let newsExtracted = 0
@@ -214,23 +214,26 @@ class ESILVWebScraper {
       for (const wrapper of Array.from(postWrappers)) {
         if (newsExtracted >= 6) break // Max 6 articles
         
-        // 1. Extraire la date
-        const dateElement = wrapper.querySelector('.post_date')
+        // 1. DATE : dans .post_third_img_wrapper > .post_date
+        const dateDiv = wrapper.querySelector('.post_date')
         let newsDate = currentDate?.toLocaleDateString('fr-FR') || ''
         
-        if (dateElement) {
-          const day = dateElement.querySelector('.date')?.textContent?.trim() || ''
-          const month = dateElement.querySelector('.month')?.textContent?.trim() || ''
-          const year = dateElement.querySelector('.year')?.textContent?.trim() || ''
+        if (dateDiv) {
+          const day = dateDiv.querySelector('.date')?.textContent?.trim() || ''
+          const month = dateDiv.querySelector('.month')?.textContent?.trim() || ''
+          const year = dateDiv.querySelector('.year')?.textContent?.trim() || ''
           
           if (day && month && year) {
             newsDate = `${day} ${month} ${year}`
           }
         }
         
-        // 2. Extraire le titre et l'URL
-        const titleLink = wrapper.querySelector('h5 a')
-        if (!titleLink) continue // Skip si pas de lien
+        // 2. TITRE + URL : dans .post_header_wrapper > .post_header > h5 > a
+        const titleLink = wrapper.querySelector('.post_header h5 a')
+        if (!titleLink) {
+          console.log(`⏭️  Bloc ignoré (pas de h5 a)`)
+          continue
+        }
         
         let title = titleLink.getAttribute('title') || titleLink.textContent?.trim() || ''
         title = title
@@ -247,7 +250,7 @@ class ESILVWebScraper {
           articleUrl = `${this.baseUrl}${articleUrl.startsWith('/') ? '' : '/'}${articleUrl}`
         }
         
-        // 3. Extraire l'extrait
+        // 3. EXTRAIT : dans .post_excerpt p
         const excerptElement = wrapper.querySelector('.post_excerpt p')
         let excerpt = excerptElement?.textContent?.trim() || ''
         excerpt = excerpt
@@ -258,7 +261,7 @@ class ESILVWebScraper {
           .trim()
           .substring(0, 200)
         
-        // 4. Extraire les tags
+        // 4. TAGS : dans .post_detail_item a[rel="tag"]
         const tags: string[] = []
         wrapper.querySelectorAll('.post_detail_item a[rel="tag"]').forEach(tagEl => {
           const tagText = tagEl.textContent?.trim()
@@ -284,6 +287,8 @@ class ESILVWebScraper {
             console.log(`   🏷️  Tags: ${tags.join(', ')}`)
           }
           console.log(`   🔗 URL: ${articleUrl}`)
+        } else {
+          console.log(`⏭️  Bloc ignoré : "${title.substring(0, 30)}..." (générique ou trop court)`)
         }
       }
       
