@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
-import { JSDOM } from 'jsdom'
+import * as cheerio from 'cheerio'
 
 interface ScraperResult {
   title: string
@@ -201,28 +201,29 @@ class ESILVWebScraper {
     const results: ScraperResult[] = []
     
     try {
-      console.log('🔍 Extraction JSDOM (structure HTML exacte ESILV)...')
+      console.log('🔍 Extraction Cheerio (structure HTML exacte ESILV)...')
       
-      const dom = new JSDOM(html)
-      const document = dom.window.document
+      const $ = cheerio.load(html)
       
       // STRUCTURE RÉELLE : <div class="post_wrapper one_third"> ou <div class="post_wrapper one_third last">
-      const postWrappers = document.querySelectorAll('.post_wrapper')
+      const postWrappers = $('.post_wrapper')
       console.log(`📦 ${postWrappers.length} blocs post_wrapper trouvés`)
       
       let newsExtracted = 0
       
-      for (const wrapper of Array.from(postWrappers)) {
-        if (newsExtracted >= 6) break // Max 6 articles
+      postWrappers.each((index, wrapperEl) => {
+        if (newsExtracted >= 6) return false // Max 6 articles, break the loop
+        
+        const wrapper = $(wrapperEl)
         
         // 1. DATE : dans .post_third_img_wrapper > .post_date
-        const dateDiv = wrapper.querySelector('.post_date')
+        const dateDiv = wrapper.find('.post_date')
         let newsDate = currentDate?.toLocaleDateString('fr-FR') || ''
         
-        if (dateDiv) {
-          const day = dateDiv.querySelector('.date')?.textContent?.trim() || ''
-          const month = dateDiv.querySelector('.month')?.textContent?.trim() || ''
-          const year = dateDiv.querySelector('.year')?.textContent?.trim() || ''
+        if (dateDiv.length > 0) {
+          const day = dateDiv.find('.date').text().trim()
+          const month = dateDiv.find('.month').text().trim()
+          const year = dateDiv.find('.year').text().trim()
           
           if (day && month && year) {
             newsDate = `${day} ${month} ${year}`
@@ -230,13 +231,13 @@ class ESILVWebScraper {
         }
         
         // 2. TITRE + URL : dans .post_header_wrapper > .post_header > h5 > a
-        const titleLink = wrapper.querySelector('.post_header h5 a')
-        if (!titleLink) {
+        const titleLink = wrapper.find('.post_header h5 a')
+        if (titleLink.length === 0) {
           console.log(`⏭️  Bloc ignoré (pas de h5 a)`)
-          continue
+          return // continue to next iteration
         }
         
-        let title = titleLink.getAttribute('title') || titleLink.textContent?.trim() || ''
+        let title = titleLink.attr('title') || titleLink.text().trim() || ''
         title = title
           .replace(/&quot;/g, '"')
           .replace(/&#039;/g, "'")
@@ -244,7 +245,7 @@ class ESILVWebScraper {
           .replace(/\s+/g, ' ')
           .trim()
         
-        let articleUrl = titleLink.getAttribute('href') || ''
+        let articleUrl = titleLink.attr('href') || ''
         
         // Assurer URL complète
         if (articleUrl && !articleUrl.startsWith('http')) {
@@ -252,8 +253,8 @@ class ESILVWebScraper {
         }
         
         // 3. EXTRAIT : dans .post_excerpt p
-        const excerptElement = wrapper.querySelector('.post_excerpt p')
-        let excerpt = excerptElement?.textContent?.trim() || ''
+        const excerptElement = wrapper.find('.post_excerpt p')
+        let excerpt = excerptElement.text().trim()
         excerpt = excerpt
           .replace(/&nbsp;/g, ' ')
           .replace(/&amp;/g, '&')
@@ -264,8 +265,8 @@ class ESILVWebScraper {
         
         // 4. TAGS : dans .post_detail_item a[rel="tag"]
         const tags: string[] = []
-        wrapper.querySelectorAll('.post_detail_item a[rel="tag"]').forEach(tagEl => {
-          const tagText = tagEl.textContent?.trim()
+        wrapper.find('.post_detail_item a[rel="tag"]').each((i, tagEl) => {
+          const tagText = $(tagEl).text().trim()
           if (tagText) tags.push(tagText)
         })
         
@@ -291,12 +292,12 @@ class ESILVWebScraper {
         } else {
           console.log(`⏭️  Bloc ignoré : "${title.substring(0, 30)}..." (générique ou trop court)`)
         }
-      }
+      })
       
-      console.log(`📊 Total: ${results.length} actualités extraites avec JSDOM`)
+      console.log(`📊 Total: ${results.length} actualités extraites avec Cheerio`)
       
     } catch (error) {
-      console.error('Error extracting news with JSDOM:', error)
+      console.error('Error extracting news with Cheerio:', error)
     }
     
     return results
