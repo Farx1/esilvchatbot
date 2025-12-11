@@ -11,6 +11,7 @@ interface ScraperResult {
   fullContent?: string  // Contenu complet de la page
   category?: string  // Catégorie de l'actualité
   tags?: string[]  // Tags/étiquettes
+  rawHtml?: string // HTML brut (tronqué) pour extraction LLM
 }
 
 class ESILVWebScraper {
@@ -194,6 +195,7 @@ class ESILVWebScraper {
       
       const html = await response.text()
       const $ = cheerio.load(html)
+      const rawHtml = html.substring(0, 12000) // Limiter la taille envoyée au LLM
       
       const contentParagraphs: string[] = []
       
@@ -414,6 +416,7 @@ class ESILVWebScraper {
           url: fullUrl,
           confidence: 0.90,
           category: pagePath.split('/')[1] || 'general',
+          rawHtml,
         })
         
         console.log(`✅ ${relevantContent.length} morceaux de contenu pertinent extraits`)
@@ -427,6 +430,7 @@ class ESILVWebScraper {
             url: fullUrl,
             confidence: 0.70,
             category: pagePath.split('/')[1] || 'general',
+            rawHtml,
           })
           console.log(`⚠️ Aucun contenu spécifique trouvé, utilisation du contenu général`)
         }
@@ -560,7 +564,8 @@ class ESILVWebScraper {
           answer: answer,
           category: category,
           confidence: result.confidence,
-          source: result.url
+          source: result.url,
+          lastVerified: new Date()
         }
       })
     } catch (error) {
@@ -620,7 +625,12 @@ export async function POST(request: NextRequest) {
           console.log(`  ✅ Nouveau: "${result.title.substring(0, 50)}..."`)
         } else {
           existingArticles++
-          console.log(`  ⏭️  Existe déjà: "${result.title.substring(0, 50)}..."`)
+          // Mettre à jour la date de vérification
+          await db.knowledgeBase.update({
+            where: { id: existing.id },
+            data: { lastVerified: new Date() }
+          })
+          console.log(`  ⏭️  Existe déjà: "${result.title.substring(0, 50)}..." (lastVerified mis à jour)`)
         }
       }
       

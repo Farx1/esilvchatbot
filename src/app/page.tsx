@@ -19,6 +19,7 @@ interface Message {
   agentType?: string
   timestamp: Date
   feedback?: 'positive' | 'negative' | 'neutral' | null
+  isStreaming?: boolean
 }
 
 export default function EnhancedESILVChatbot() {
@@ -39,6 +40,7 @@ export default function EnhancedESILVChatbot() {
   ])
   const [input, setInput] = useState('')
   const [isLoading, setIsLoading] = useState(false)
+  const [isVerifying, setIsVerifying] = useState(false)
   const [copiedId, setCopiedId] = useState<string | null>(null)
   const [suggestions, setSuggestions] = useState([
     "Quels sont les programmes disponibles ?",
@@ -129,6 +131,9 @@ export default function EnhancedESILVChatbot() {
   const handleSendMessage = async () => {
     if (!input.trim()) return
 
+    const verificationRegex = /(responsable|contact|directeur|directrice|manager|alumni|actualit|actualité|news|récent|dernière|dernier)/i
+    const willVerify = verificationRegex.test(input)
+
     const userMessageId = Date.now().toString()
     const assistantMessageId = (Date.now() + 1).toString()
 
@@ -143,12 +148,13 @@ export default function EnhancedESILVChatbot() {
     const userInput = input
     setInput('')
     setIsLoading(true)
+    setIsVerifying(willVerify)
 
     // Create placeholder for streaming message
     const assistantMessage: Message = {
       id: assistantMessageId,
       role: 'assistant',
-      content: '',
+      content: willVerify ? '🔎 Recherche en cours...' : '',
       agentType: 'orchestration',
       timestamp: new Date(),
       isStreaming: true // Marquer comme en cours de streaming
@@ -195,6 +201,7 @@ export default function EnhancedESILVChatbot() {
               : msg
           ))
           setIsLoading(false)
+          setIsVerifying(false)
           updateSuggestions(userInput)
         }
       }, 30) // 30ms entre chaque chunk
@@ -207,6 +214,7 @@ export default function EnhancedESILVChatbot() {
           ? { ...msg, content: '⚠️ Désolé, je rencontre des difficultés techniques. Veuillez réessayer.' }
           : msg
       ))
+      setIsVerifying(false)
       setIsLoading(false)
     }
   }
@@ -288,6 +296,16 @@ export default function EnhancedESILVChatbot() {
             </div>
             
             <div className="flex gap-3">
+              {isVerifying && (
+                <Badge className="bg-amber-100 text-amber-800 border-amber-200 flex items-center gap-1">
+                  <motion.div 
+                    className="w-2 h-2 bg-amber-500 rounded-full"
+                    animate={{ opacity: [0.4, 1, 0.4] }}
+                    transition={{ duration: 1, repeat: Infinity }}
+                  />
+                  Recherche en cours...
+                </Badge>
+              )}
               {/* User Info Badge */}
               {userId && (
                 <div className="flex items-center gap-2 bg-gradient-to-r from-blue-50 to-purple-50 px-3 py-1.5 rounded-lg border border-blue-200">
