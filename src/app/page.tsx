@@ -382,8 +382,8 @@ export default function EnhancedESILVChatbot() {
                         boxShadow: message.role === 'assistant' ? '0 10px 25px -5px rgba(0, 0, 0, 0.1)' : 'none'
                       }}
                     >
-                      {/* Feedback buttons */}
-                      {message.role === 'assistant' && (
+                      {/* Feedback buttons - Only show on real messages (not initial welcome message) */}
+                      {message.role === 'assistant' && message.id !== '1' && (
                         <motion.div 
                           className="absolute -top-2 -right-2 flex gap-1 transition-all"
                           initial={{ opacity: 1 }}
@@ -394,6 +394,7 @@ export default function EnhancedESILVChatbot() {
                             whileTap={{ scale: 0.9 }}
                             onClick={() => handleCopy(message.content, message.id)}
                             className="p-1.5 bg-white border border-slate-200 rounded-full shadow-sm hover:bg-slate-50"
+                            title="Copier"
                           >
                             {copiedId === message.id ? (
                               <div className="text-green-600">✓</div>
@@ -411,6 +412,7 @@ export default function EnhancedESILVChatbot() {
                                 ? 'bg-green-100 border-green-300' 
                                 : 'bg-white border-slate-200 hover:bg-slate-50'
                             }`}
+                            title="Utile"
                           >
                             <div className="text-slate-600">👍</div>
                           </motion.button>
@@ -424,6 +426,7 @@ export default function EnhancedESILVChatbot() {
                                 ? 'bg-red-100 border-red-300' 
                                 : 'bg-white border-slate-200 hover:bg-slate-50'
                             }`}
+                            title="Pas utile"
                           >
                             <div className="text-slate-600">👎</div>
                           </motion.button>
