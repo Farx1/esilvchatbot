@@ -118,7 +118,8 @@ export default function EnhancedESILVChatbot() {
       role: 'assistant',
       content: '',
       agentType: 'orchestration',
-      timestamp: new Date()
+      timestamp: new Date(),
+      isStreaming: true // Marquer comme en cours de streaming
     }
     
     setMessages(prev => [...prev, assistantMessage])
@@ -150,11 +151,17 @@ export default function EnhancedESILVChatbot() {
           
           setMessages(prev => prev.map(msg => 
             msg.id === assistantMessageId 
-              ? { ...msg, content: fullText.substring(0, currentIndex), agentType: data.agentType }
+              ? { ...msg, content: fullText.substring(0, currentIndex), agentType: data.agentType, isStreaming: true }
               : msg
           ))
         } else {
           clearInterval(streamInterval)
+          // Marquer le message comme terminé (plus de streaming)
+          setMessages(prev => prev.map(msg => 
+            msg.id === assistantMessageId 
+              ? { ...msg, isStreaming: false }
+              : msg
+          ))
           setIsLoading(false)
           updateSuggestions(userInput)
         }
