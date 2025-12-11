@@ -1,0 +1,100 @@
+# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
+
+# dependencies
+node_modules
+/.pnp
+.pnp.*
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/versions
+
+# testing
+/coverage
+__tests__/coverage
+
+# next.js
+/.next/
+/out/
+
+# production
+/build
+
+# misc
+.DS_Store
+*.pem
+
+# debug
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# env files (IMPORTANT: never commit sensitive data)
+.env
+.env*.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# vercel
+.vercel
+
+# typescript
+*.tsbuildinfo
+next-env.d.ts
+
+# IDE
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+.idea
+*.swp
+*.swo
+*~
+.cursor
+.z-ai-config
+
+# OS
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# logs
+*.log
+logs
+server.log
+dev.log
+
+# database
+/db/*.db
+/prisma/db/*.db
+*.db-journal
+
+# local development
+local-*
+test
+prompt
+*.local
+
+# temporary files
+.tmp
+tmp/
+temp/
+
+# jupyter notebooks (if any)
+.ipynb_checkpoints
+*.ipynb
+
+# python (if any scripts)
+__pycache__/
+*.py[cod]
+*$py.class
+.Python
+venv/
+env/
