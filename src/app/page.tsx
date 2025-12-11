@@ -301,19 +301,6 @@ export default function EnhancedESILVChatbot() {
                   RAG Viewer
                 </Button>
               </motion.div>
-              <motion.div 
-                whileHover={{ scale: 1.05 }} 
-                whileTap={{ scale: 0.95 }}
-                onClick={() => {
-                  console.log('Admin button clicked')
-                  router.push('/admin')
-                }}
-              >
-                <Button variant="outline" size="sm" className="gap-2">
-                  <Shield className="h-4 w-4" />
-                  Admin
-                </Button>
-              </motion.div>
             </div>
           </div>
         </motion.div>

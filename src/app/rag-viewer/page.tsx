@@ -120,15 +120,6 @@ export default function RAGViewer() {
                 <BarChart3 className="h-4 w-4" />
                 Analytics
               </Button>
-              <Button 
-                variant="outline" 
-                size="sm" 
-                onClick={() => router.push('/admin')}
-                className="gap-2"
-              >
-                <Shield className="h-4 w-4" />
-                Admin
-              </Button>
             </div>
             <Badge variant="secondary" className="text-sm">
               <Database className="h-3 w-3 mr-1" />
