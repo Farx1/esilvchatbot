@@ -96,6 +96,9 @@ class ChatOrchestrator {
     // Détecter si la question nécessite des informations récentes/actuelles
     const needsRecentInfo = /\b(dernier|dernière|derniers|dernières|récent|récente|récents|récentes|nouveau|nouvelle|nouveaux|nouvelles|actualité|actualités|news|à jour|mise à jour|changement|modification)\b/i.test(message)
     
+    // Détecter si la question porte sur des INFORMATIONS VARIABLES (personnel, contacts, responsables)
+    const needsWebVerification = /\b(responsable|contact|directeur|directrice|chef|manager|personnel|équipe|qui est|téléphone|email|adresse)\b/i.test(message)
+    
     // Obtenir la date actuelle pour le contexte
     const currentDate = new Date()
     const dateStr = currentDate.toLocaleDateString('fr-FR', { 
@@ -109,16 +112,17 @@ class ChatOrchestrator {
     let sources: any[] = []
     let webResults = ''
 
-    if (needsRecentInfo) {
-      // Pour les questions sur l'actualité, FORCER le scraper (ignore RAG)
-      console.log(`🌐 Question sur actualités détectée (${dateStr}) → FORCE scraper web (ignore RAG)`)
+    if (needsRecentInfo || needsWebVerification) {
+      // Pour les questions sur l'actualité OU les informations variables, FORCER le scraper
+      const reason = needsRecentInfo ? 'actualités' : 'informations variables (personnel/contacts)'
+      console.log(`🌐 Question sur ${reason} détectée (${dateStr}) → FORCE scraper web (ignore RAG)`)
       webResults = await this.searchWebESILV(message, currentDate)
       
-      // NE PAS interroger le RAG pour les actualités
+      // NE PAS interroger le RAG pour ces questions
       knowledgeResults = ''
       sources = []
       
-      console.log('✅ Scraper activé en mode exclusif pour actualités')
+      console.log(`✅ Scraper activé en mode exclusif pour ${reason}`)
     } else {
       // Pour les questions générales, priorité au RAG
       const ragData = await this.searchKnowledgeBase(message)
@@ -145,27 +149,27 @@ class ChatOrchestrator {
     
     QUESTION UTILISATEUR: "${message}"
     
-    ${needsRecentInfo ? '🔴 QUESTION SUR LES ACTUALITÉS - UTILISE UNIQUEMENT LES RÉSULTATS WEB CI-DESSOUS' : 'INFORMATIONS DE LA BASE DE CONNAISSANCES ESILV:'}
-    ${needsRecentInfo ? '' : knowledgeResults}
+    ${needsRecentInfo || needsWebVerification ? '🔴 QUESTION NÉCESSITANT DES INFOS À JOUR - UTILISE UNIQUEMENT LES RÉSULTATS WEB CI-DESSOUS' : 'INFORMATIONS DE LA BASE DE CONNAISSANCES ESILV:'}
+    ${needsRecentInfo || needsWebVerification ? '' : knowledgeResults}
     
-    RÉSULTATS DE RECHERCHE WEB ESILV (ACTUALITÉS EN TEMPS RÉEL):
+    RÉSULTATS DE RECHERCHE WEB ESILV (INFORMATIONS EN TEMPS RÉEL):
     ${webResults}
     
     INSTRUCTIONS IMPORTANTES:
     1. ⚠️ RÉPONDS UNIQUEMENT EN FRANÇAIS - C'est une règle absolue
-    2. ${needsRecentInfo ? '🔴 POUR LES ACTUALITÉS: Utilise UNIQUEMENT les résultats web ci-dessus. Cite les titres EXACTS, dates et sources.' : 'Utilise les informations les plus précises disponibles'}
-    3. ${needsRecentInfo ? 'Cite TOUJOURS les dates des actualités (ex: "10 Déc 2025")' : 'Si les informations ont des dates, mentionne-les'}
-    4. ${needsRecentInfo ? 'Mentionne les tags/catégories si fournis (ex: hackathon, cybersécurité)' : 'Pour les questions sur l\'actualité, cite les dates et sources'}
+    2. ${needsRecentInfo || needsWebVerification ? '🔴 UTILISE UNIQUEMENT les résultats web ci-dessus. Cite les sources EXACTES.' : 'Utilise les informations les plus précises disponibles'}
+    3. ${needsRecentInfo ? 'Cite TOUJOURS les dates des actualités (ex: "10 Déc 2025")' : needsWebVerification ? 'Cite TOUJOURS la source de l\'information (ex: "Source: https://www.esilv.fr/...")' : 'Si les informations ont des dates, mentionne-les'}
+    4. ${needsRecentInfo ? 'Mentionne les tags/catégories si fournis (ex: hackathon, cybersécurité)' : needsWebVerification ? 'Pour les informations de contact/personnel, vérifie qu\'elles proviennent du site officiel' : 'Pour les questions sur l\'actualité, cite les dates et sources'}
     5. Sois cohérent avec les réponses précédentes
     6. Structure ta réponse de manière claire avec des listes ou des paragraphes bien organisés
-    7. ${needsRecentInfo ? 'Cite les sources en fin de réponse (ex: "Source: https://www.esilv.fr/...")' : 'Si tu n\'as pas d\'information spécifique, sois honnête'}
+    7. ${needsRecentInfo || needsWebVerification ? 'Cite les sources en fin de réponse (ex: "Source: https://www.esilv.fr/...")' : 'Si tu n\'as pas d\'information spécifique, sois honnête'}
     8. Termine par une question ouverte pour encourager la conversation
     9. Adapte ton ton au contexte (étudiant potentiel, parent, professionnel, etc.)
-    ${needsRecentInfo ? '10. 🔴 NE PAS inventer d\'actualités - utilise UNIQUEMENT celles fournies par le scraper web' : ''}
+    ${needsRecentInfo || needsWebVerification ? '10. 🔴 NE PAS inventer d\'informations - utilise UNIQUEMENT celles fournies par le scraper web' : ''}
     `
 
     try {
-      if (needsRecentInfo && webResults) {
+      if ((needsRecentInfo || needsWebVerification) && webResults) {
         console.log('\n🌐 SCRAPER WEB - Résultats trouvés:')
         console.log(webResults.substring(0, 300) + '...\n')
       } else {
@@ -176,7 +180,7 @@ class ChatOrchestrator {
       const response = await this.aiOrchestrator.generateCompletion(prompt, conversationHistory)
       
       // Retourner le bon agentType selon la source utilisée
-      const agentType = needsRecentInfo && webResults ? 'scraper' : 'retrieval'
+      const agentType = (needsRecentInfo || needsWebVerification) && webResults ? 'scraper' : 'retrieval'
       
       return {
         response: response || 'Désolé, je ne peux pas répondre à cette question pour le moment.',
