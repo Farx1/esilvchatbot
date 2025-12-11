@@ -174,9 +174,13 @@ class ChatOrchestrator {
       }
       
       const response = await this.aiOrchestrator.generateCompletion(prompt, conversationHistory)
+      
+      // Retourner le bon agentType selon la source utilisée
+      const agentType = needsRecentInfo && webResults ? 'scraper' : 'retrieval'
+      
       return {
         response: response || 'Désolé, je ne peux pas répondre à cette question pour le moment.',
-        agentType: 'retrieval',
+        agentType: agentType,
         ragSources: sources
       }
     } catch (error) {
