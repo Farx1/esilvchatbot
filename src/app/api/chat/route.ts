@@ -14,6 +14,8 @@ interface ChatRequest {
   }>
   messageId?: string
   assistantMessageId?: string
+  userId?: string
+  sessionId?: string
 }
 
 interface ChatResponse {
@@ -343,7 +345,7 @@ class ChatOrchestrator {
 export async function POST(request: NextRequest) {
   try {
     const body: ChatRequest = await request.json()
-    const { message, conversationHistory = [], messageId, assistantMessageId } = body
+    const { message, conversationHistory = [], messageId, assistantMessageId, userId, sessionId } = body
 
     if (!message) {
       return NextResponse.json(
@@ -370,8 +372,15 @@ export async function POST(request: NextRequest) {
         break
     }
 
-    // Save conversation to database with provided IDs
-    const savedIds = await saveConversation(message, response, messageId, assistantMessageId)
+    // Save conversation to database with provided IDs and user info
+    const savedIds = await saveConversation(
+      message, 
+      response, 
+      messageId, 
+      assistantMessageId,
+      userId,
+      sessionId
+    )
     
     // Add the real database IDs to the response
     return NextResponse.json({
@@ -392,20 +401,31 @@ async function saveConversation(
   userMessage: string, 
   assistantResponse: ChatResponse,
   userMessageId?: string,
-  assistantMessageId?: string
+  assistantMessageId?: string,
+  userId?: string,
+  sessionId?: string
 ): Promise<{ userMessageId: string; assistantMessageId: string }> {
   try {
-    // Create or get conversation
-    let sessionId = 'default' // In a real app, this would come from user session
+    // Use provided sessionId or default
+    const finalSessionId = sessionId || 'default'
+    const finalUserId = userId || null
     
+    // Create or get conversation for this user/session
     let conversation = await db.conversation.findFirst({
-      where: { sessionId }
+      where: { 
+        sessionId: finalSessionId,
+        userId: finalUserId 
+      }
     })
 
     if (!conversation) {
       conversation = await db.conversation.create({
-        data: { sessionId }
+        data: { 
+          sessionId: finalSessionId,
+          userId: finalUserId
+        }
       })
+      console.log(`✨ Nouvelle conversation créée pour user: ${finalUserId}, session: ${finalSessionId}`)
     }
 
     // Save user message with provided ID

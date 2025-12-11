@@ -8,8 +8,9 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Badge } from '@/components/ui/badge'
-import { Send, Bot, User, GraduationCap, FileText, BarChart3, Sparkles, Zap, Shield, ThumbsUp, ThumbsDown } from 'lucide-react'
+import { Send, Bot, User, GraduationCap, FileText, BarChart3, Sparkles, Zap, Shield, ThumbsUp, ThumbsDown, UserCircle } from 'lucide-react'
 import { Timestamp } from '@/components/Timestamp'
+import { SessionManager } from '@/lib/session'
 
 interface Message {
   id: string
@@ -118,7 +119,9 @@ export default function EnhancedESILVChatbot() {
           message: userInput,
           conversationHistory: messages.slice(-10),
           messageId: userMessageId,
-          assistantMessageId: assistantMessageId
+          assistantMessageId: assistantMessageId,
+          userId: userId,
+          sessionId: sessionId
         })
       })
 
@@ -233,7 +236,33 @@ export default function EnhancedESILVChatbot() {
               </div>
             </div>
             
-            <div className="flex gap-2">
+            <div className="flex gap-3">
+              {/* User Info Badge */}
+              {userId && (
+                <div className="flex items-center gap-2 bg-gradient-to-r from-blue-50 to-purple-50 px-3 py-1.5 rounded-lg border border-blue-200">
+                  <UserCircle className="h-4 w-4 text-blue-600" />
+                  <div className="text-xs">
+                    <p className="font-semibold text-blue-900">
+                      User: {userId.split('-')[1]?.substring(0, 6)}
+                    </p>
+                  </div>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => {
+                      if (confirm('Créer une nouvelle session utilisateur ?')) {
+                        SessionManager.resetUser()
+                        window.location.reload()
+                      }
+                    }}
+                    className="h-6 px-2 text-xs"
+                    title="Nouvelle session"
+                  >
+                    Nouveau
+                  </Button>
+                </div>
+              )}
+              
               <motion.div 
                 whileHover={{ scale: 1.05 }} 
                 whileTap={{ scale: 0.95 }}
