@@ -48,7 +48,7 @@ export default function EnhancedESILVChatbot() {
   ])
   const [feedbackStates, setFeedbackStates] = useState<Record<string, 'up' | 'down' | null>>({})
 
-  // Initialiser l'utilisateur et la session
+  // Initialiser l'utilisateur, la session et charger l'historique
   useEffect(() => {
     const userInfo = SessionManager.getUserId()
     const sessInfo = SessionManager.getSessionId()
@@ -56,12 +56,44 @@ export default function EnhancedESILVChatbot() {
     setSessionId(sessInfo)
     console.log('👤 User ID:', userInfo)
     console.log('🔑 Session ID:', sessInfo)
+    
+    // Charger l'historique de conversation depuis le localStorage
+    loadConversationHistory(sessInfo)
   }, [])
+  
+  const loadConversationHistory = (sessionId: string) => {
+    try {
+      const savedMessages = localStorage.getItem(`chat_history_${sessionId}`)
+      if (savedMessages) {
+        const parsed = JSON.parse(savedMessages)
+        // Convertir les timestamps string en Date
+        const messagesWithDates = parsed.map((msg: any) => ({
+          ...msg,
+          timestamp: new Date(msg.timestamp)
+        }))
+        setMessages(messagesWithDates)
+        console.log(`📜 Historique chargé: ${messagesWithDates.length} messages`)
+      }
+    } catch (error) {
+      console.error('Erreur lors du chargement de l\'historique:', error)
+    }
+  }
+  
+  const saveConversationHistory = (msgs: Message[]) => {
+    try {
+      localStorage.setItem(`chat_history_${sessionId}`, JSON.stringify(msgs))
+    } catch (error) {
+      console.error('Erreur lors de la sauvegarde de l\'historique:', error)
+    }
+  }
 
-  // Auto-scroll vers le bas quand un nouveau message arrive
+  // Auto-scroll vers le bas quand un nouveau message arrive + sauvegarder
   useEffect(() => {
     scrollToBottom()
-  }, [messages])
+    if (sessionId && messages.length > 1) { // Ne pas sauvegarder si c'est juste le message initial
+      saveConversationHistory(messages)
+    }
+  }, [messages, sessionId])
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })

@@ -79,6 +79,7 @@ model KnowledgeBase {
   answer      String
   category    String   // 'programs', 'admissions', 'courses', etc.
   confidence  Float?
+  source      String?  // URL source de l'information
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 }

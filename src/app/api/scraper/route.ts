@@ -210,7 +210,7 @@ class ESILVWebScraper {
       let blockMatch
       let newsExtracted = 0
       
-      while ((blockMatch = postBlockPattern.exec(html)) !== null && newsExtracted < 5) {
+      while ((blockMatch = postBlockPattern.exec(html)) !== null && newsExtracted < 6) { // Augmenté à 6 articles
         const block = blockMatch[1]
         
         // Extraire la date (jour, mois, année)
@@ -238,9 +238,22 @@ class ESILVWebScraper {
                        .trim()
         }
         
-        // Extraire l'URL de l'article
-        const urlMatch = /<a href="([^"]+)"[^>]*>/i.exec(block)
-        const articleUrl = urlMatch ? urlMatch[1] : `${this.baseUrl}/actus/`
+        // Extraire l'URL de l'article depuis le <h5><a href>
+        const urlMatch = /<h5[^>]*><a href="([^"]+)"[^>]*title=/i.exec(block)
+        let articleUrl = urlMatch ? urlMatch[1] : ''
+        
+        // Si pas d'URL trouvée, chercher dans tout le bloc
+        if (!articleUrl) {
+          const altUrlMatch = /<a href="([^"]+)"[^>]*title="[^"]*"[^>]*>/i.exec(block)
+          articleUrl = altUrlMatch ? altUrlMatch[1] : `${this.baseUrl}/actus/`
+        }
+        
+        // S'assurer que l'URL est complète
+        if (articleUrl && !articleUrl.startsWith('http')) {
+          articleUrl = `${this.baseUrl}${articleUrl.startsWith('/') ? '' : '/'}${articleUrl}`
+        }
+        
+        console.log(`  🔗 URL extraite: ${articleUrl}`)
         
         // Extraire un extrait du contenu depuis <div class="post_excerpt">
         const excerptMatch = /<div class="post_excerpt[^"]*">[\s\S]*?<p>([^<]+)<\/p>/i.exec(block)
