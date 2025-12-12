@@ -1,5 +1,19 @@
 # ESILV Smart Assistant - Documentation Technique
 
+**Version stable :** `v1.0.0-stable`
+
+## ⚠️ État du Projet
+
+### Fonctionnalités Stables
+- Système multi-agents complet
+- Base de connaissances avec recherche intelligente
+- Vérification parallèle intelligente des données RAG
+- Interface utilisateur complète
+- Support multi-LLM
+
+### En Développement
+- **Scraping automatique** : Le système de scraping web est fonctionnel et peut extraire des informations du site ESILV. Cependant, la comparaison automatique et la mise à jour du RAG basées sur les résultats du scraper ne sont pas encore finalisées. Le scraper fonctionne en parallèle pour vérifier les données, mais la logique de détection de conflits et de mise à jour automatique est en cours d'implémentation.
+
 ## 📋 Table des Matières
 
 1. [Architecture Globale](#architecture)
