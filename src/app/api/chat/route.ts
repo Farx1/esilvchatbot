@@ -113,55 +113,57 @@ class ChatOrchestrator {
     let webResults = ''
     let needsVerification = false
 
-    // TOUJOURS interroger le RAG d'abord (réponse rapide)
+    // TOUJOURS interroger le RAG d'abord
     const ragData = await this.searchKnowledgeBase(message)
     knowledgeResults = ragData.results
     sources = ragData.sources
 
-    // Vérifier l'âge des données RAG : si pas vérifié aujourd'hui → lancer vérification
+    // Vérifier l'âge des données RAG
     if (sources.length > 0) {
       const oldestSource = sources[0] // Supposons que searchKnowledgeBase retourne les sources triées
       const lastVerified = oldestSource.lastVerified ? new Date(oldestSource.lastVerified) : new Date(oldestSource.createdAt)
       const daysSinceVerification = Math.floor((currentDate.getTime() - lastVerified.getTime()) / (1000 * 60 * 60 * 24))
       
-      if (daysSinceVerification >= 1) {
+      // Règles de vérification basées sur l'âge
+      if (daysSinceVerification > 30) {
         needsVerification = true
-        console.log(`⚠️ Données RAG âgées de ${daysSinceVerification} jours → Vérification scraper parallèle`)
+        console.log(`⚠️ Données RAG anciennes (${daysSinceVerification} jours) → Vérification scraper nécessaire`)
+      } else if (daysSinceVerification > 7 && (needsRecentInfo || needsWebVerification)) {
+        needsVerification = true
+        console.log(`⚠️ Données RAG de ${daysSinceVerification} jours + question sensible → Vérification scraper`)
       } else {
-        console.log(`✅ Données vérifiées aujourd'hui → pas de nouvelle vérification nécessaire`)
+        console.log(`✅ Données RAG récentes (${daysSinceVerification} jours) → Pas de vérification nécessaire`)
       }
-    } else {
-      // Pas de sources → on devra scraper
-      needsVerification = true
     }
 
-    const shouldScrape = needsRecentInfo || needsWebVerification || needsVerification || !knowledgeResults || knowledgeResults.trim() === ''
-    if (shouldScrape) {
-      let reason = 'vérification'
+    // Activer le scraper si nécessaire
+    if (needsRecentInfo || needsWebVerification || needsVerification || !knowledgeResults || knowledgeResults.trim() === '') {
+      let reason = 'fallback (RAG vide)'
       if (needsRecentInfo) reason = 'actualités'
       else if (needsWebVerification) reason = 'informations variables (personnel/contacts)'
-      else if (!knowledgeResults || knowledgeResults.trim() === '') reason = 'fallback (RAG vide)'
-      else reason = 'vérification données âgées'
+      else if (needsVerification) reason = 'vérification données anciennes'
       
       console.log(`🌐 Scraper activé: ${reason}`)
-      const includeHtml = true
       
-      // Lancer le scraper EN PARALLÈLE si on a déjà des données RAG récentes
-      if (knowledgeResults && knowledgeResults.trim() !== '' && needsVerification) {
-        console.log('🔄 Scraping en parallèle pour vérification (réponse immédiate maintenue)...')
-        this.searchWebESILV(message, currentDate, includeHtml).then(async (webData) => {
+      // Lancer le scraper EN PARALLÈLE si on a déjà des données RAG
+      if (knowledgeResults && knowledgeResults.trim() !== '') {
+        console.log('🔄 Scraping en parallèle pour vérification...')
+        // Scraper en arrière-plan (ne pas attendre)
+        this.searchWebESILV(message, currentDate).then(async (webData) => {
           if (webData && webData.trim() !== '') {
-            console.log('✅ Scraper terminé - Données web disponibles pour comparaison')
-            // TODO: comparer et mettre à jour le RAG automatiquement
+            console.log('✅ Scraper terminé - Comparaison avec RAG...')
+            // TODO: Comparer webData avec knowledgeResults et mettre à jour si différent
+            // Pour l'instant, on log juste
+            console.log('📊 Données web disponibles pour comparaison')
           }
         }).catch(err => console.error('❌ Erreur scraper parallèle:', err))
+        
+        // Utiliser les données RAG immédiatement (pas d'attente)
+        console.log('⚡ Réponse immédiate avec données RAG (scraper en arrière-plan)')
       } else {
-        // RAG vide ou question critique → attendre les données web
-        webResults = await this.searchWebESILV(message, currentDate, includeHtml)
+        // Pas de données RAG, attendre le scraper
+        webResults = await this.searchWebESILV(message, currentDate)
         console.log(`✅ Scraper terminé: ${reason}`)
-        // Dans ce cas, on ignore le RAG pour la réponse
-        knowledgeResults = ''
-        sources = []
       }
     }
     
@@ -188,7 +190,7 @@ class ChatOrchestrator {
     1. ⚠️ RÉPONDS UNIQUEMENT EN FRANÇAIS - C'est une règle absolue
     2. ${needsRecentInfo || needsWebVerification ? '🔴 UTILISE UNIQUEMENT les résultats web ci-dessus. Cite les sources EXACTES.' : 'Utilise les informations les plus précises disponibles'}
     3. ${needsRecentInfo ? 'Cite TOUJOURS les dates des actualités (ex: "10 Déc 2025")' : needsWebVerification ? 'Cite TOUJOURS la source de l\'information (ex: "Source: https://www.esilv.fr/...")' : 'Si les informations ont des dates, mentionne-les'}
-    4. ${needsRecentInfo ? 'Mentionne les tags/catégories si fournis (ex: hackathon, cybersécurité)' : needsWebVerification ? 'Pour les informations de contact/personnel, vérifie qu\'elles proviennent du site officiel. Si du HTML brut est fourni, analyse-le pour extraire précisément le nom / contact.' : 'Pour les questions sur l\'actualité, cite les dates et sources'}
+    4. ${needsRecentInfo ? 'Mentionne les tags/catégories si fournis (ex: hackathon, cybersécurité)' : needsWebVerification ? 'Pour les informations de contact/personnel, vérifie qu\'elles proviennent du site officiel' : 'Pour les questions sur l\'actualité, cite les dates et sources'}
     5. Sois cohérent avec les réponses précédentes
     6. Structure ta réponse de manière claire avec des listes ou des paragraphes bien organisés
     7. ${needsRecentInfo || needsWebVerification ? 'Cite les sources en fin de réponse (ex: "Source: https://www.esilv.fr/...")' : 'Si tu n\'as pas d\'information spécifique, sois honnête'}
@@ -412,7 +414,7 @@ class ChatOrchestrator {
   }
 
   // Enhanced ESILV-specific web search
-  private async searchWebESILV(query: string, currentDate?: Date, includeHtml: boolean = false): Promise<string> {
+  private async searchWebESILV(query: string, currentDate?: Date): Promise<string> {
     try {
       console.log('🌐 Appel du scraper web pour:', query)
       
@@ -424,8 +426,7 @@ class ChatOrchestrator {
           query,
           currentDate: currentDate?.toISOString(),
           deepScrape: true,  // Activer le deep scraping
-          autoSave: false,   // Ne pas sauvegarder automatiquement, l'orchestrateur décidera
-          includeHtml
+          autoSave: false    // Ne pas sauvegarder automatiquement, l'orchestrateur décidera
         })
       })
 
@@ -455,10 +456,6 @@ class ChatOrchestrator {
             // Utiliser le contenu complet si disponible
             const content = r.fullContent || r.content
             result += `\n📄 Contenu: ${content}`
-            if (includeHtml && r.rawHtml) {
-              const htmlSnippet = r.rawHtml.substring(0, 4000)
-              result += `\n🧩 HTML_SOURCE (tronqué):\n${htmlSnippet}`
-            }
             return result
           })
           .join('\n\n')
@@ -506,19 +503,13 @@ class ChatOrchestrator {
               answer: answer,
               category: 'actualités_scrapées',
               confidence: result.confidence || 0.90,
-              source: result.url,
-              lastVerified: new Date()
+              source: result.url
             }
           })
           
           console.log(`  ✅ Ajouté au RAG: "${result.title.substring(0, 50)}..."`)
         } else {
-          // Mettre à jour la date de vérification pour refléter le contrôle effectué
-          await db.knowledgeBase.update({
-            where: { id: existing.id },
-            data: { lastVerified: new Date() }
-          })
-          console.log(`  ⏭️  Déjà dans RAG (lastVerified mis à jour): "${result.title.substring(0, 50)}..."`)
+          console.log(`  ⏭️  Déjà dans RAG: "${result.title.substring(0, 50)}..."`)
         }
       }
       
