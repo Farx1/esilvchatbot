@@ -242,13 +242,15 @@ model Document {
 }
 
 model KnowledgeBase {
-  id          String   @id @default(cuid())
-  question    String
-  answer      String
-  category    String   // 'programs', 'admissions', 'courses', etc.
-  confidence  Float?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id            String   @id @default(cuid())
+  question      String
+  answer        String
+  category      String   // 'programs', 'admissions', 'courses', etc.
+  confidence    Float?
+  source        String?  // URL source de l'information
+  lastVerified  DateTime @default(now()) // Dernière vérification via scraper
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 }
 ```
 
@@ -268,9 +270,14 @@ model KnowledgeBase {
 #### 2. Agent de Récupération (RAG)
 **Rôle**: Réponses factuelles
 - Recherche dans la base de connaissances locale
-- Intégration avec web search ESILV
+- Vérification parallèle intelligente : vérifie l'âge des données et lance un scraper en parallèle si nécessaire
+- Règles de vérification :
+  - Données > 30 jours : toujours vérifier
+  - Données > 7 jours + question sensible : vérifier
+  - Données < 7 jours : pas de vérification
 - Génération de réponses contextuelles
 - Score de confiance
+- **Note** : Le scraping web est fonctionnel mais la mise à jour automatique du RAG basée sur les résultats du scraper est en cours d'implémentation
 
 #### 3. Agent de Formulaire
 **Rôle**: Collecte de données

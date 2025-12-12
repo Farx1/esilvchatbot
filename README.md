@@ -2,6 +2,21 @@
 
 Assistant intelligent pour l'École Supérieure d'Ingénieurs Léonard-de-Vinci, développé avec Next.js et TypeScript.
 
+**Version stable :** `v1.0.0-stable`
+
+## État du Projet
+
+### ✅ Fonctionnalités Stables
+- Système multi-agents (RAG, Form-filling, Orchestration)
+- Base de connaissances avec recherche intelligente
+- Interface utilisateur complète
+- Support multi-LLM (Ollama, Gemini, OpenAI, Claude, HuggingFace)
+- Vérification parallèle intelligente des données RAG
+- Analytics et statistiques
+
+### 🚧 En Développement
+- **Scraping automatique** : Le système de scraping web est fonctionnel mais la mise à jour automatique du RAG basée sur les résultats du scraper n'est pas encore finalisée. Le scraper fonctionne en parallèle pour vérifier les données, mais la comparaison et la mise à jour automatique sont en cours d'implémentation.
+
 ## Fonctionnalités
 
 ### Système Multi-Agents
@@ -14,6 +29,14 @@ Assistant intelligent pour l'École Supérieure d'Ingénieurs Léonard-de-Vinci,
 - Informations sur les 15 majeures de spécialisation
 - Détails sur l'alternance, l'international et la vie étudiante
 - Recherche intelligente avec gestion des variantes linguistiques
+- Vérification parallèle intelligente : le système vérifie automatiquement l'âge des données et lance un scraper en parallèle si nécessaire (> 30 jours ou > 7 jours pour questions sensibles)
+- Tracking de la dernière vérification via le champ `lastVerified`
+
+### Scraping Web (En Développement)
+- Scraper fonctionnel pour extraire des informations du site ESILV
+- Navigation intelligente : mapping automatique des requêtes vers les pages pertinentes
+- Deep scraping : extraction du contenu complet des pages d'actualités
+- **Note** : La comparaison automatique et la mise à jour du RAG basées sur les résultats du scraper sont en cours d'implémentation
 
 ### Interface Utilisateur
 - Design responsive avec Tailwind CSS
