@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
-import pdf from 'pdf-parse'
+import * as pdfParse from 'pdf-parse'
 import mammoth from 'mammoth'
 
 // Force Node.js runtime (required for pdf-parse and mammoth)
@@ -12,7 +12,7 @@ async function parsePDF(buffer: ArrayBuffer): Promise<string> {
   try {
     console.log('🔍 Starting PDF parse, buffer size:', buffer.byteLength)
     const uint8Array = new Uint8Array(buffer)
-    const data = await pdf(uint8Array)
+    const data = await pdfParse(uint8Array)
     console.log('✅ PDF parsed successfully, text length:', data.text?.length || 0)
     
     if (!data.text || data.text.length === 0) {
