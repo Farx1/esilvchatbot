@@ -3,6 +3,10 @@ import { db } from '@/lib/db'
 import pdf from 'pdf-parse'
 import mammoth from 'mammoth'
 
+// Force Node.js runtime (required for pdf-parse and mammoth)
+export const runtime = 'nodejs'
+export const dynamic = 'force-dynamic'
+
 // Helper function to parse PDF
 async function parsePDF(buffer: ArrayBuffer): Promise<string> {
   try {
