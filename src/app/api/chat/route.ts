@@ -233,16 +233,27 @@ class ChatOrchestrator {
     2. **Exactitude - RÈGLE CRITIQUE**: 
        ${needsRecentInfo || needsWebVerification ? '🔴 Utilise EXCLUSIVEMENT les informations du scraper web ci-dessus' : '🔴 Utilise EXCLUSIVEMENT les informations de la base de connaissances fournies ci-dessus'}
        
-       ⛔ INTERDICTIONS ABSOLUES:
-       - NE JAMAIS inventer, halluciner ou extrapoler des informations
-       - NE JAMAIS utiliser tes connaissances générales sur l'ESILV
-       - NE JAMAIS mentionner des noms, dates, chiffres qui ne sont PAS dans les données fournies
-       - NE JAMAIS répéter une réponse précédente si la question est différente
+       🚨 INTERDICTIONS ABSOLUES 🚨
        
-       ✅ SI LES DONNÉES FOURNIES NE RÉPONDENT PAS:
-       - Dis CLAIREMENT : "Je n'ai pas d'information spécifique sur ce sujet dans ma base actuelle."
-       - Propose de vérifier sur le site officiel : "Je vous invite à consulter https://www.esilv.fr pour plus de détails."
-       - N'invente RIEN, même si tu "penses" connaître la réponse
+       Tu es en mode "COPIE STRICTE" : COPIE EXACTEMENT les noms, termes et informations depuis les données fournies.
+       
+       ⛔ NE JAMAIS:
+       - Inventer, halluciner ou extrapoler des informations
+       - Utiliser tes connaissances générales sur l'ESILV
+       - Mentionner des noms qui ne sont PAS textuellement dans les données (ex: "LéoFly", "DaVinciCode", "BDL")
+       - Paraphraser ou "traduire" les noms - COPIE-LES EXACTEMENT
+       - Répéter une réponse précédente si la question est différente
+       
+       ✅ TU DOIS:
+       - COPIER mot-à-mot les noms propres (associations, personnes, lieux)
+       - Si le texte dit "Leo volley", écris "Leo volley" (pas "LéoFly" !)
+       - Si le texte dit "Léo Basket", écris "Léo Basket" (pas autre chose !)
+       - Vérifier 2 fois que chaque nom que tu écris est EXACTEMENT dans les données
+       
+       ✅ SI LES DONNÉES NE RÉPONDENT PAS:
+       - Dis : "Je n'ai pas d'information spécifique sur ce sujet dans ma base actuelle."
+       - Propose : "Je vous invite à consulter https://www.esilv.fr"
+       - N'invente RIEN, même si tu "connais" la réponse
     
     3. **Structure de réponse EN MARKDOWN**:
        ⚠️ IMPORTANT: Ta réponse sera rendue avec un parser Markdown. RESPECTE CES RÈGLES:
@@ -364,7 +375,10 @@ class ChatOrchestrator {
         console.log(knowledgeResults.substring(0, 300) + '...\n')
       }
       
-      const response = await this.aiOrchestrator.generateCompletion(prompt, conversationHistory)
+      let response = await this.aiOrchestrator.generateCompletion(prompt, conversationHistory)
+      
+      // Post-traiter pour forcer les retours à la ligne Markdown
+      response = this.fixMarkdownLineBreaks(response)
       
       // Retourner le bon agentType selon la source utilisée
       const agentType = (needsRecentInfo || needsWebVerification) && webResults ? 'scraper' : 'retrieval'
@@ -408,7 +422,8 @@ class ChatOrchestrator {
     `
 
     try {
-      const response = await this.aiOrchestrator.generateCompletion(prompt, conversationHistory)
+      let response = await this.aiOrchestrator.generateCompletion(prompt, conversationHistory)
+      response = this.fixMarkdownLineBreaks(response)
       return {
         response: response || 'Je vais recueillir vos coordonnées pour vous contacter.',
         agentType: 'form_filling',
@@ -500,7 +515,8 @@ class ChatOrchestrator {
     `
 
     try {
-      const response = await this.aiOrchestrator.generateCompletion(prompt, conversationHistory)
+      let response = await this.aiOrchestrator.generateCompletion(prompt, conversationHistory)
+      response = this.fixMarkdownLineBreaks(response)
       return {
         response: response || 'Comment puis-je vous aider concernant ESILV ?',
         agentType: 'orchestration'
@@ -618,6 +634,26 @@ class ChatOrchestrator {
       console.error('Error searching knowledge base:', error)
       return { results: '', sources: [] }
     }
+  }
+
+  // Post-traiter la réponse pour forcer les retours à la ligne dans les listes Markdown
+  private fixMarkdownLineBreaks(text: string): string {
+    if (!text) return text
+    
+    // Détecter les patterns où plusieurs bullets sont sur la même ligne
+    // Pattern: "• Item1 • Item2" → "• Item1\n• Item2"
+    let fixed = text
+      .replace(/([•\-])\s*([^•\-\n]+)\s+([•\-])/g, '$1 $2\n$3') // Premier passage
+      .replace(/([•\-])\s*([^•\-\n]+)\s+([•\-])/g, '$1 $2\n$3') // Deuxième passage (au cas où)
+      .replace(/([•\-])\s*([^•\-\n]+)\s+([•\-])/g, '$1 $2\n$3') // Troisième passage
+    
+    // Ajouter des retours à la ligne après les sections en gras
+    fixed = fixed.replace(/(\*\*[^*]+\*\*:)\s+([•\-])/g, '$1\n$2')
+    
+    // S'assurer qu'il y a un espace après chaque bullet
+    fixed = fixed.replace(/([•\-])([^\s])/g, '$1 $2')
+    
+    return fixed
   }
 
   // Extraire les mots-clés pertinents d'une requête
