@@ -536,14 +536,19 @@ class ChatOrchestrator {
           OR: searchConditions
         },
         orderBy: [
-          { confidence: 'desc' },
-          { lastVerified: 'desc' }, // Prioriser les données récemment vérifiées
-          { createdAt: 'desc' }
+          { createdAt: 'desc' } // Prioriser les entrées les plus récentes (plus pertinentes)
         ],
-        take: 5 // Augmenté de 3 à 5 pour avoir plus de résultats
+        take: 10 // Augmenté pour avoir plus de résultats
       })
       
       console.log(`📊 RAG: ${results.length} résultat(s) trouvé(s)`)
+      
+      if (results.length > 0) {
+        console.log(`   Premiers résultats:`)
+        results.slice(0, 3).forEach(r => {
+          console.log(`   - ${r.question.substring(0, 60)}...`)
+        })
+      }
 
       if (results.length === 0) {
         return {
