@@ -84,3 +84,16 @@ model KnowledgeBase {
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 }
+
+model RAGUpdate {
+  id              String   @id @default(cuid())
+  updateType      String   // 'delete', 'add', 'update', 'verify'
+  entryId         String?  // ID de l'entrée concernée
+  oldValue        String?  // Ancienne valeur (pour delete/update)
+  newValue        String?  // Nouvelle valeur (pour add/update)
+  source          String?  // URL source des nouvelles données
+  query           String   // Question utilisateur qui a déclenché la mise à jour
+  confidence      Float?   // Score de confiance de la mise à jour
+  triggeredBy     String   @default("scraper") // 'scraper', 'manual', 'scheduled'
+  createdAt       DateTime @default(now())
+}

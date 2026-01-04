@@ -23,8 +23,8 @@ export async function POST(request: NextRequest) {
 
     console.log(`✅ Feedback enregistré: ${messageId} -> ${feedbackValue}`)
 
-    return NextResponse.json({ 
-      success: true, 
+    return NextResponse.json({
+      success: true,
       message: updatedMessage 
     })
   } catch (error) {

@@ -21,8 +21,8 @@ export async function GET(request: NextRequest) {
     if (search) {
       // Case-insensitive search
       const allItems = await db.knowledgeBase.findMany({
-        orderBy: { createdAt: 'desc' }
-      })
+      orderBy: { createdAt: 'desc' }
+    })
       
       const searchLower = search.toLowerCase()
       items = allItems.filter(item => 
@@ -148,7 +148,7 @@ export async function POST(request: NextRequest) {
           count: ids.length 
         })
       }
-      
+
       case 'delete_by_keywords': {
         const { keywords } = body
         
@@ -179,6 +179,32 @@ export async function POST(request: NextRequest) {
         })
       }
       
+      case 'update_entry': {
+        const { id, answer, source } = body
+        
+        if (!id) {
+          return NextResponse.json(
+            { error: 'id is required' },
+            { status: 400 }
+          )
+        }
+        
+        const updated = await db.knowledgeBase.update({
+          where: { id },
+          data: {
+            answer: answer || undefined,
+            source: source || undefined,
+            lastVerified: new Date(),
+            updatedAt: new Date()
+          }
+        })
+        
+        return NextResponse.json({ 
+          success: true, 
+          updated 
+        })
+      }
+
       case 'find_conflicts': {
         const { newInfo } = body
         

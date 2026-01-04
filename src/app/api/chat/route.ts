@@ -152,9 +152,35 @@ class ChatOrchestrator {
         this.searchWebESILV(message, currentDate).then(async (webData) => {
           if (webData && webData.trim() !== '') {
             console.log('✅ Scraper terminé - Comparaison avec RAG...')
-            // TODO: Comparer webData avec knowledgeResults et mettre à jour si différent
-            // Pour l'instant, on log juste
-            console.log('📊 Données web disponibles pour comparaison')
+            
+            // Comparer les données RAG vs Web
+            const comparison = this.compareDataSources(
+              knowledgeResults,
+              webData,
+              message
+            )
+            
+            if (comparison.hasConflict) {
+              console.log(`⚠️ Conflit détecté (${comparison.confidence}):`, comparison.differences)
+              
+              // Déclencher la résolution de conflits
+              const conflictResolution = await this.detectAndResolveConflicts(
+                webData,
+                message,
+                sources
+              )
+              
+              if (conflictResolution.conflictsFound > 0) {
+                console.log(`🔧 ${conflictResolution.conflictsFound} conflits trouvés, ${conflictResolution.entriesToDelete.length} entrées à supprimer`)
+                
+                // Mettre à jour le RAG automatiquement avec logging
+                const updateResult = await this.updateRAGWithWebData(conflictResolution, message)
+                console.log(`✅ RAG mis à jour: ${updateResult.deleted} supprimées, ${updateResult.added} ajoutées, ${updateResult.updated} mises à jour`)
+                console.log(`📝 Toutes les mises à jour ont été loggées dans RAGUpdate`)
+              }
+            } else {
+              console.log('✅ Données cohérentes, pas de mise à jour nécessaire')
+            }
           }
         }).catch(err => console.error('❌ Erreur scraper parallèle:', err))
         
@@ -212,7 +238,7 @@ class ChatOrchestrator {
       
       // Retourner le bon agentType selon la source utilisée
       const agentType = (needsRecentInfo || needsWebVerification) && webResults ? 'scraper' : 'retrieval'
-      
+
       return {
         response: response || 'Désolé, je ne peux pas répondre à cette question pour le moment.',
         agentType: agentType,
@@ -411,6 +437,491 @@ class ChatOrchestrator {
     })
     
     return Array.from(keywords)
+  }
+
+  // Comparer les données du RAG avec les données web pour détecter les conflits
+  private compareDataSources(
+    ragResults: string,
+    webResults: string,
+    query: string
+  ): {
+    hasConflict: boolean
+    confidence: 'high' | 'medium' | 'low'
+    differences: string[]
+  } {
+    const differences: string[] = []
+    let conflictScore = 0
+
+    try {
+      // 1. Extraire les entités nommées (noms de personnes)
+      const ragNames = this.extractNames(ragResults)
+      const webNames = this.extractNames(webResults)
+
+      // Comparer les noms (important pour les responsables, contacts)
+      if (ragNames.length > 0 && webNames.length > 0) {
+        const ragNamesSet = new Set(ragNames.map(n => n.toLowerCase()))
+        const webNamesSet = new Set(webNames.map(n => n.toLowerCase()))
+        
+        // Chercher des noms différents pour le même rôle
+        if (!this.haveSameElements(ragNamesSet, webNamesSet)) {
+          differences.push(`Noms différents détectés - RAG: [${ragNames.join(', ')}] vs Web: [${webNames.join(', ')}]`)
+          conflictScore += 3  // Conflit élevé
+        }
+      }
+
+      // 2. Extraire et comparer les dates
+      const ragDates = this.extractDates(ragResults)
+      const webDates = this.extractDates(webResults)
+
+      if (ragDates.length > 0 && webDates.length > 0) {
+        // Comparer les années récentes (2024, 2025)
+        const ragRecentDates = ragDates.filter(d => d.includes('2024') || d.includes('2025'))
+        const webRecentDates = webDates.filter(d => d.includes('2024') || d.includes('2025'))
+        
+        if (ragRecentDates.length > 0 && webRecentDates.length > 0) {
+          const ragDatesSet = new Set(ragRecentDates)
+          const webDatesSet = new Set(webRecentDates)
+          
+          if (!this.haveSameElements(ragDatesSet, webDatesSet)) {
+            differences.push(`Dates différentes - RAG: [${ragRecentDates.join(', ')}] vs Web: [${webRecentDates.join(', ')}]`)
+            conflictScore += 2  // Conflit moyen-élevé
+          }
+        }
+      }
+
+      // 3. Extraire et comparer les nombres/statistiques
+      const ragNumbers = this.extractNumbers(ragResults)
+      const webNumbers = this.extractNumbers(webResults)
+
+      if (ragNumbers.length > 0 && webNumbers.length > 0) {
+        // Comparer les grands nombres (statistiques, pourcentages, salaires)
+        const ragBigNumbers = ragNumbers.filter(n => parseInt(n) > 50)
+        const webBigNumbers = webNumbers.filter(n => parseInt(n) > 50)
+        
+        if (ragBigNumbers.length > 0 && webBigNumbers.length > 0) {
+          const ragNumbersSet = new Set(ragBigNumbers)
+          const webNumbersSet = new Set(webBigNumbers)
+          
+          if (!this.haveSameElements(ragNumbersSet, webNumbersSet)) {
+            differences.push(`Chiffres différents - RAG: [${ragBigNumbers.slice(0, 5).join(', ')}] vs Web: [${webBigNumbers.slice(0, 5).join(', ')}]`)
+            conflictScore += 1  // Conflit moyen
+          }
+        }
+      }
+
+      // 4. Comparer les mots-clés principaux (hors stopwords)
+      const ragKeywords = this.extractKeywords(ragResults)
+      const webKeywords = this.extractKeywords(webResults)
+
+      const commonKeywords = ragKeywords.filter(k => 
+        webKeywords.some(wk => wk.toLowerCase() === k.toLowerCase())
+      )
+
+      // Si peu de mots-clés en commun, c'est peut-être des infos complètement différentes
+      const keywordOverlap = commonKeywords.length / Math.max(ragKeywords.length, webKeywords.length, 1)
+      
+      if (keywordOverlap < 0.3 && ragKeywords.length > 3 && webKeywords.length > 3) {
+        differences.push(`Peu de mots-clés communs (${Math.round(keywordOverlap * 100)}% overlap)`)
+        conflictScore += 1
+      }
+
+      // 5. Déterminer le niveau de conflit
+      let hasConflict = conflictScore > 0
+      let confidence: 'high' | 'medium' | 'low' = 'low'
+
+      if (conflictScore >= 3) {
+        confidence = 'high'
+      } else if (conflictScore >= 2) {
+        confidence = 'medium'
+      } else if (conflictScore >= 1) {
+        confidence = 'low'
+      } else {
+        hasConflict = false
+      }
+
+      // Log pour debug
+      if (hasConflict) {
+        console.log(`⚠️ Conflit détecté (score: ${conflictScore}, confidence: ${confidence})`)
+        console.log(`📊 Différences: ${differences.join(' | ')}`)
+      } else {
+        console.log(`✅ Pas de conflit significatif détecté`)
+      }
+
+      return { hasConflict, confidence, differences }
+
+    } catch (error) {
+      console.error('❌ Erreur lors de la comparaison des sources:', error)
+      return { hasConflict: false, confidence: 'low', differences: [] }
+    }
+  }
+
+  // Extraire les noms de personnes (heuristique simple)
+  private extractNames(text: string): string[] {
+    // Chercher des patterns comme "M. Nom" ou "Prénom Nom" ou "Dr. Nom"
+    const namePatterns = [
+      /(?:M\.|Mme|Dr\.|Pr\.|Professeur|Responsable)\s+([A-Z][a-zéèêëàâäôöûüçñ]+(?:\s+[A-Z][a-zéèêëàâäôöûüçñ]+)*)/g,
+      /\b([A-Z][a-zéèêëàâäôöûüçñ]+\s+[A-Z][A-ZÉÈÊËÀÂÄÔÖÛÜÇÑ]+)/g,
+    ]
+    
+    const names = new Set<string>()
+    
+    namePatterns.forEach(pattern => {
+      let match
+      while ((match = pattern.exec(text)) !== null) {
+        names.add(match[1].trim())
+      }
+    })
+    
+    return Array.from(names)
+  }
+
+  // Extraire les dates
+  private extractDates(text: string): string[] {
+    const datePatterns = [
+      /\b(\d{1,2})\s+(janvier|février|mars|avril|mai|juin|juillet|août|septembre|octobre|novembre|décembre)\s+(\d{4})\b/gi,
+      /\b(\d{4})\b/g,  // Années seules
+      /\b(\d{1,2})\/(\d{1,2})\/(\d{2,4})\b/g  // Format DD/MM/YYYY
+    ]
+    
+    const dates = new Set<string>()
+    
+    datePatterns.forEach(pattern => {
+      let match
+      while ((match = pattern.exec(text)) !== null) {
+        dates.add(match[0].trim())
+      }
+    })
+    
+    return Array.from(dates)
+  }
+
+  // Extraire les nombres
+  private extractNumbers(text: string): string[] {
+    const numberPattern = /\b(\d+(?:[.,]\d+)?)\b/g
+    const numbers = new Set<string>()
+    
+    let match
+    while ((match = numberPattern.exec(text)) !== null) {
+      numbers.add(match[1])
+    }
+    
+    return Array.from(numbers)
+  }
+
+  // Vérifier si deux ensembles ont des éléments en commun
+  private haveSameElements(set1: Set<string>, set2: Set<string>): boolean {
+    if (set1.size === 0 && set2.size === 0) return true
+    if (set1.size === 0 || set2.size === 0) return false
+    
+    // Vérifier si au moins un élément est en commun
+    for (const item of set1) {
+      if (set2.has(item)) return true
+    }
+    return false
+  }
+
+  // Détecter et résoudre les conflits entre données web et RAG
+  private async detectAndResolveConflicts(
+    webData: string,
+    query: string,
+    sources: any[]
+  ): Promise<{
+    conflictsFound: number
+    entriesToDelete: string[]
+    newDataToAdd: any
+  }> {
+    try {
+      console.log('🔍 Détection de conflits avec l\'API find_conflicts...')
+      
+      // 1. Appeler l'API find_conflicts
+      const response = await fetch('http://localhost:3000/api/knowledge', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'find_conflicts',
+          newInfo: webData
+        })
+      })
+
+      if (!response.ok) {
+        console.error('❌ Erreur API find_conflicts:', response.status)
+        return { conflictsFound: 0, entriesToDelete: [], newDataToAdd: null }
+      }
+
+      const { conflicts, count } = await response.json()
+      console.log(`📊 ${count} conflits potentiels détectés`)
+
+      if (count === 0) {
+        return { conflictsFound: 0, entriesToDelete: [], newDataToAdd: null }
+      }
+
+      // 2. Analyser les conflits et décider lesquels supprimer
+      const entriesToDelete: string[] = []
+      const currentDate = new Date()
+
+      for (const conflict of conflicts) {
+        // Vérifier l'âge de l'entrée en conflit
+        const entryAge = sources.find(s => s.question === conflict.question)
+        const lastVerified = entryAge?.lastVerified 
+          ? new Date(entryAge.lastVerified)
+          : entryAge?.createdAt 
+            ? new Date(entryAge.createdAt)
+            : null
+
+        let shouldDelete = false
+
+        if (lastVerified) {
+          const daysSinceVerification = Math.floor(
+            (currentDate.getTime() - lastVerified.getTime()) / (1000 * 60 * 60 * 24)
+          )
+
+          // Règles de décision
+          if (daysSinceVerification > 30) {
+            // Données anciennes (> 30 jours) : privilégier les données web
+            shouldDelete = true
+            console.log(`🗑️  Entrée à supprimer (${daysSinceVerification} jours): "${conflict.question.substring(0, 50)}..."`)
+          } else if (daysSinceVerification > 7) {
+            // Données modérément anciennes (7-30 jours)
+            // Vérifier si c'est une information variable (personnel, contacts)
+            const isVariableInfo = /responsable|contact|directeur|manager|personnel|équipe|téléphone|email/i.test(conflict.question)
+            if (isVariableInfo) {
+              shouldDelete = true
+              console.log(`🗑️  Entrée variable à supprimer (${daysSinceVerification} jours): "${conflict.question.substring(0, 50)}..."`)
+            }
+          }
+        } else {
+          // Pas de date de vérification : considérer comme ancien
+          shouldDelete = true
+          console.log(`🗑️  Entrée sans date de vérification à supprimer: "${conflict.question.substring(0, 50)}..."`)
+        }
+
+        if (shouldDelete) {
+          entriesToDelete.push(conflict.id)
+        }
+      }
+
+      // 3. Préparer les nouvelles données à ajouter
+      // Parser le webData pour extraire les informations structurées
+      const newDataToAdd = this.parseWebDataForRAG(webData, query)
+
+      console.log(`✅ Résolution: ${entriesToDelete.length} entrées à supprimer, nouvelles données préparées`)
+
+      return {
+        conflictsFound: count,
+        entriesToDelete,
+        newDataToAdd
+      }
+
+    } catch (error) {
+      console.error('❌ Erreur lors de la détection de conflits:', error)
+      return { conflictsFound: 0, entriesToDelete: [], newDataToAdd: null }
+    }
+  }
+
+  // Parser les données web pour créer des entrées RAG structurées
+  private parseWebDataForRAG(webData: string, query: string): any {
+    try {
+      // Format actuel du webData: "📰 Source: ... 📌 Titre: ... 📅 Date: ... 📄 Contenu: ..."
+      const entries: any[] = []
+
+      // Séparer les différents résultats (s'il y en a plusieurs)
+      const results = webData.split('📰 Source:').filter(r => r.trim())
+
+      for (const result of results) {
+        // Extraire les différentes parties
+        const urlMatch = result.match(/^([^\n]+)/)
+        const titleMatch = result.match(/📌 Titre:\s*([^\n]+)/)
+        const dateMatch = result.match(/📅 Date:\s*([^\n]+)/)
+        const tagsMatch = result.match(/🏷️\s+Tags:\s*([^\n]+)/)
+        const contentMatch = result.match(/📄 Contenu:\s*([\s\S]+)/)
+
+        if (titleMatch && contentMatch) {
+          const url = urlMatch ? urlMatch[1].trim() : ''
+          const title = titleMatch[1].trim()
+          const date = dateMatch ? dateMatch[1].trim() : ''
+          const tags = tagsMatch ? tagsMatch[1].trim().split(',').map(t => t.trim()) : []
+          const content = contentMatch[1].trim()
+
+          // Générer une question pertinente basée sur le titre et la query
+          let question = query
+          if (title.length > 10) {
+            // Utiliser le titre pour créer une question plus spécifique
+            question = `${query} - ${title}`
+          }
+
+          // Déterminer la catégorie automatiquement
+          let category = 'actualités'
+          if (/alumni|anciens|diplômés/i.test(query + title)) {
+            category = 'alumni'
+          } else if (/stage|alternance|emploi/i.test(query + title)) {
+            category = 'stages_emploi'
+          } else if (/admission|concours/i.test(query + title)) {
+            category = 'admissions'
+          } else if (/recherche|professeur/i.test(query + title)) {
+            category = 'recherche'
+          } else if (/responsable|contact|personnel/i.test(query + title)) {
+            category = 'contacts_personnel'
+          }
+
+          entries.push({
+            question: question.substring(0, 255),  // Limiter la longueur
+            answer: content.substring(0, 2000),    // Limiter la longueur
+            category,
+            confidence: 0.90,  // Haute confiance (source officielle)
+            source: url,
+            tags: tags.length > 0 ? tags : undefined
+          })
+        }
+      }
+
+      return entries.length > 0 ? entries : null
+
+    } catch (error) {
+      console.error('❌ Erreur lors du parsing du webData:', error)
+      return null
+    }
+  }
+
+  // Mettre à jour le RAG avec les données web (suppression + ajout)
+  private async updateRAGWithWebData(
+    conflictResolution: {
+      conflictsFound: number
+      entriesToDelete: string[]
+      newDataToAdd: any
+    },
+    query: string
+  ): Promise<{
+    deleted: number
+    added: number
+    updated: number
+  }> {
+    let deleted = 0
+    let added = 0
+    let updated = 0
+
+    try {
+      console.log('🔧 Mise à jour du RAG en cours...')
+
+      // 1. Supprimer les entrées obsolètes
+      if (conflictResolution.entriesToDelete.length > 0) {
+        console.log(`🗑️  Suppression de ${conflictResolution.entriesToDelete.length} entrées obsolètes...`)
+        
+        const deleteResponse = await fetch('http://localhost:3000/api/knowledge', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'bulk_delete',
+            ids: conflictResolution.entriesToDelete
+          })
+        })
+
+        if (deleteResponse.ok) {
+          const deleteData = await deleteResponse.json()
+          deleted = deleteData.count || 0
+          console.log(`✅ ${deleted} entrées supprimées`)
+          
+          // Logger chaque suppression
+          for (const entryId of conflictResolution.entriesToDelete) {
+            await this.logRAGUpdate('delete', entryId, null, null, null, query, null)
+          }
+        } else {
+          console.error('❌ Erreur lors de la suppression:', deleteResponse.status)
+        }
+      }
+
+      // 2. Ajouter les nouvelles entrées
+      if (conflictResolution.newDataToAdd && Array.isArray(conflictResolution.newDataToAdd)) {
+        console.log(`➕ Ajout de ${conflictResolution.newDataToAdd.length} nouvelles entrées...`)
+        
+        // Préparer les données pour l'insertion
+        const entriesToAdd = conflictResolution.newDataToAdd.map((entry: any) => ({
+          id: `kb_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+          question: entry.question,
+          answer: entry.answer,
+          category: entry.category,
+          confidence: entry.confidence,
+          source: entry.source,
+          lastVerified: new Date(),
+          createdAt: new Date(),
+          updatedAt: new Date()
+        }))
+
+        const addResponse = await fetch('http://localhost:3000/api/knowledge', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'bulk_create',
+            items: entriesToAdd
+          })
+        })
+
+        if (addResponse.ok) {
+          const addData = await addResponse.json()
+          added = addData.count || 0
+          console.log(`✅ ${added} nouvelles entrées ajoutées`)
+          
+          // Logger chaque ajout
+          for (let i = 0; i < conflictResolution.newDataToAdd.length; i++) {
+            const entry = conflictResolution.newDataToAdd[i]
+            const entryId = entriesToAdd[i].id
+            await this.logRAGUpdate(
+              'add',
+              entryId,
+              null,
+              entry.answer.substring(0, 200),
+              entry.source,
+              query,
+              entry.confidence
+            )
+          }
+        } else {
+          console.error('❌ Erreur lors de l\'ajout:', addResponse.status)
+        }
+      }
+
+      // 3. Mettre à jour lastVerified pour les entrées non supprimées mais vérifiées
+      // (Pour l'instant, on considère que les entrées non en conflit sont toujours valides)
+      // Cette étape pourrait être améliorée pour mettre à jour lastVerified même sans conflit
+
+      console.log(`✅ Mise à jour RAG terminée: ${deleted} supprimées, ${added} ajoutées, ${updated} mises à jour`)
+
+      return { deleted, added, updated }
+
+    } catch (error) {
+      console.error('❌ Erreur lors de la mise à jour du RAG:', error)
+      return { deleted, added, updated }
+    }
+  }
+
+  // Logger une mise à jour du RAG
+  private async logRAGUpdate(
+    updateType: 'delete' | 'add' | 'update' | 'verify',
+    entryId: string | null,
+    oldValue: string | null,
+    newValue: string | null,
+    source: string | null,
+    query: string,
+    confidence: number | null
+  ): Promise<void> {
+    try {
+      await fetch('http://localhost:3000/api/rag-updates', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          updateType,
+          entryId,
+          oldValue,
+          newValue,
+          source,
+          query,
+          confidence,
+          triggeredBy: 'scraper'
+        })
+      })
+    } catch (error) {
+      console.error('❌ Erreur lors du logging RAG update:', error)
+      // Ne pas bloquer le flux principal si le logging échoue
+    }
   }
 
   // Enhanced ESILV-specific web search

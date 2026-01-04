@@ -447,17 +447,17 @@ export default function KnowledgeDatabaseManager() {
             {/* Knowledge Items Table */}
             <div className="border rounded-lg">
               <ScrollArea className="h-[500px]">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead className="w-[400px]">Question</TableHead>
-                      <TableHead className="flex-1">Réponse</TableHead>
-                      <TableHead>Catégorie</TableHead>
-                      <TableHead>Confiance</TableHead>
-                      <TableHead>Date</TableHead>
-                      <TableHead className="text-right">Actions</TableHead>
-                    </TableRow>
-                  </TableHeader>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="w-[400px]">Question</TableHead>
+                    <TableHead className="flex-1">Réponse</TableHead>
+                    <TableHead>Catégorie</TableHead>
+                    <TableHead>Confiance</TableHead>
+                    <TableHead>Date</TableHead>
+                    <TableHead className="text-right">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
                   <TableBody>
                     {filteredItems.map((item) => (
                       <TableRow key={item.id}>
@@ -523,7 +523,7 @@ export default function KnowledgeDatabaseManager() {
                     ))}
                   </TableBody>
                 </Table>
-              </ScrollArea>
+                </ScrollArea>
             </div>
 
             {filteredItems.length === 0 && (
