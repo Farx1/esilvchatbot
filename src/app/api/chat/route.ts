@@ -3,7 +3,7 @@ import { db } from '@/lib/db'
 import { ChatOrchestrator as AIChatOrchestrator } from '@/app/api/ai-config/route'
 
 // Agent types
-type AgentType = 'retrieval' | 'form_filling' | 'orchestration'
+type AgentType = 'retrieval' | 'form_filling' | 'orchestration' | 'scraper'
 
 interface ChatRequest {
   message: string
@@ -84,7 +84,7 @@ class ChatOrchestrator {
   }
 
   // Enhanced retrieval with better ESILV knowledge
-  async handleRetrieval(message: string, conversationHistory: any[] = []): Promise<{ response: string; agentType: AgentType }> {
+  async handleRetrieval(message: string, conversationHistory: any[] = []): Promise<{ response: string; agentType: AgentType; ragSources?: any[] }> {
     await this.initialize()
 
     // Build context from conversation history (limité pour éviter un contexte trop long)
@@ -327,7 +327,7 @@ class ChatOrchestrator {
     - Ne résume pas le contexte dans ta réponse.
     - Ne cite pas explicitement des parties du contexte sauf si l'utilisateur le demande.
 
-    TYPE D'AGENT ACTUEL: ${agentType}
+    TYPE D'AGENT ACTUEL: orchestration
 
     QUESTION UTILISATEUR:
     "${message}"
