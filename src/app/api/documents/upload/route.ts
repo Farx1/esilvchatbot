@@ -82,7 +82,7 @@ export async function POST(request: NextRequest) {
 
     // Validate file type and size
     const fileExtension = file.name.toLowerCase().match(/\.(pdf|docx|txt|md)$/)?.[1]
-    const maxSize = 10 * 1024 * 1024 // 10MB
+    const maxSize = 50 * 1024 * 1024 // 50MB (augmenté pour supporter les gros PDFs comme les plaquettes)
 
     if (!fileExtension) {
       return NextResponse.json(
@@ -93,7 +93,7 @@ export async function POST(request: NextRequest) {
 
     if (file.size > maxSize) {
       return NextResponse.json(
-        { error: 'File too large. Maximum size is 10MB.' },
+        { error: `File too large. Maximum size is ${Math.round(maxSize / 1024 / 1024)}MB.` },
         { status: 400 }
       )
     }

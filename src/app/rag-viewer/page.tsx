@@ -144,12 +144,12 @@ export default function RAGViewer() {
       return
     }
 
-    // Vérifier la taille (10MB max)
-    if (file.size > 10 * 1024 * 1024) {
+    // Vérifier la taille (50MB max)
+    if (file.size > 50 * 1024 * 1024) {
       setUploadStatus({
         uploading: false,
         success: false,
-        error: 'Fichier trop volumineux (max 10MB)',
+        error: 'Fichier trop volumineux (max 50MB)',
         filename: file.name
       })
       setTimeout(() => setUploadStatus({ uploading: false, success: false, error: null, filename: null }), 5000)
@@ -354,7 +354,7 @@ export default function RAGViewer() {
                   {isDragging ? 'Déposez le fichier ici' : 'Glissez-déposez un document'}
                 </p>
                 <p className="text-sm text-muted-foreground mt-2">
-                  PDF, DOCX, TXT ou MD • Max 10MB
+                  PDF, DOCX, TXT ou MD • Max 50MB
                 </p>
                 <div className="flex items-center gap-2 mt-4">
                   <Badge variant="outline">
