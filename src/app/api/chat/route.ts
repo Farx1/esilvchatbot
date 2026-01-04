@@ -231,15 +231,34 @@ class ChatOrchestrator {
     2. **Exactitude**: 
        ${needsRecentInfo || needsWebVerification ? '🔴 Utilise EXCLUSIVEMENT les informations du scraper web ci-dessus' : 'Utilise les informations de la base de connaissances'}
        - NE JAMAIS inventer ou halluciner des informations
-       - Si tu ne sais pas : "Je n'ai pas d'information vérifiée sur ce point"
+       - ⚠️ Si les données fournies NE RÉPONDENT PAS à la question, dis CLAIREMENT : "Je n'ai pas d'information sur ce sujet dans ma base de connaissances actuelle."
+       - NE JAMAIS répéter une réponse précédente si la question est différente
        - Ne JAMAIS donner de nom ou titre incomplet/incorrect de l'école
+       - Si la question porte sur un sujet différent de celui des données fournies, ADMETS-LE au lieu d'inventer
     
-    3. **Structure de réponse**:
+    3. **Structure de réponse EN MARKDOWN**:
+       ⚠️ IMPORTANT: Ta réponse sera rendue avec un parser Markdown. RESPECTE CES RÈGLES:
+       
        - Phrase d'introduction directe (1-2 lignes)
        - Corps structuré avec listes à puces OU paragraphes courts
        - ${needsRecentInfo ? 'Toujours inclure les dates (format: "DD Mmm YYYY")' : 'Inclure les détails pertinents'}
        - ${needsRecentInfo ? 'Mentionner les tags/catégories (ex: hackathon, cybersécurité)' : 'Rester factuel et précis'}
        - Conclusion courte + question ouverte pour continuer la conversation
+       
+       📝 FORMAT MARKDOWN OBLIGATOIRE:
+       - Titres de section: **Texte en gras:** (avec double astérisque ET deux-points)
+       - CHAQUE élément de liste doit être sur UNE LIGNE SÉPARÉE avec un retour à la ligne
+       - Liste à puces: • (bullet) OU - (tiret) au DÉBUT de chaque ligne
+       - Ligne vide entre les sections
+       
+       ❌ MAUVAIS (tout sur une ligne):
+       "**Informatique & Data:** • Item 1 • Item 2 • Item 3"
+       
+       ✅ BON (une ligne par item):
+       "**Informatique & Data:**
+       • Item 1
+       • Item 2
+       • Item 3"
     
     4. **Citations obligatoires**:
        ${needsRecentInfo || needsWebVerification ? '🔴 Pour CHAQUE fait, cite la source : [Source: URL_exacte]' : 'Cite les sources quand disponibles : [Source: URL]'}
@@ -456,14 +475,25 @@ class ChatOrchestrator {
       // Extraire les mots-clés pertinents de la requête
       const keywords = this.extractKeywords(query)
       
+      console.log(`🔍 Recherche RAG avec mots-clés: ${keywords.join(', ')}`)
+      
       // Construire les conditions de recherche pour chaque mot-clé
-      // Note: SQLite ne supporte pas 'mode: insensitive', on utilise toLowerCase() à la place
-      const lowerKeywords = keywords.map(k => k.toLowerCase())
-      const searchConditions = lowerKeywords.flatMap(keyword => [
-        { question: { contains: keyword } },
-        { answer: { contains: keyword } },
-        { category: { contains: keyword } }
-      ])
+      // Pour SQLite case-insensitive: chercher à la fois minuscule et variantes capitalisées
+      const searchConditions = keywords.flatMap(keyword => {
+        const lower = keyword.toLowerCase()
+        const capitalized = lower.charAt(0).toUpperCase() + lower.slice(1)
+        const upper = keyword.toUpperCase()
+        
+        return [
+          { question: { contains: lower } },
+          { answer: { contains: lower } },
+          { category: { contains: lower } },
+          { question: { contains: capitalized } },
+          { answer: { contains: capitalized } },
+          { question: { contains: upper } },
+          { answer: { contains: upper } }
+        ]
+      })
       
       const results = await db.knowledgeBase.findMany({
         where: {
@@ -474,8 +504,10 @@ class ChatOrchestrator {
           { lastVerified: 'desc' }, // Prioriser les données récemment vérifiées
           { createdAt: 'desc' }
         ],
-        take: 3 // Réduit de 5 à 3 pour limiter la taille du contexte
+        take: 5 // Augmenté de 3 à 5 pour avoir plus de résultats
       })
+      
+      console.log(`📊 RAG: ${results.length} résultat(s) trouvé(s)`)
 
       if (results.length === 0) {
         return {
@@ -510,8 +542,16 @@ class ChatOrchestrator {
 
   // Extraire les mots-clés pertinents d'une requête
   private extractKeywords(query: string): string[] {
-    // Mots vides à ignorer
-    const stopWords = ['le', 'la', 'les', 'un', 'une', 'des', 'de', 'du', 'à', 'au', 'aux', 'et', 'ou', 'est', 'sont', 'quoi', 'quel', 'quelle', 'quels', 'quelles', 'comment', 'où', 'qui', 'que', 'quand', 'pourquoi', 'l', 'd']
+    // Mots vides à ignorer (étendu)
+    const stopWords = [
+      'le', 'la', 'les', 'un', 'une', 'des', 'de', 'du', 'à', 'au', 'aux', 'et', 'ou', 'est', 'sont',
+      'quoi', 'quel', 'quelle', 'quels', 'quelles', 'comment', 'où', 'qui', 'que', 'quand', 'pourquoi',
+      'pourrais', 'pourrait', 'peux', 'peut', 'faire', 'fais', 'fait', 'donner', 'donne',
+      'me', 'te', 'nous', 'vous', 'leur', 'mon', 'ma', 'mes', 'ton', 'ta', 'tes',
+      'tableau', 'liste', 'détails', 'infos', 'information', 'informations',
+      'esilv', 'école', 'ecole', // Ne pas chercher "esilv" car trop générique
+      'l', 'd', 'c', 'j', 's', 'n', 'm', 't', 'y'
+    ]
     
     // Normaliser et diviser la requête
     const words = query.toLowerCase()
@@ -531,9 +571,20 @@ class ChatOrchestrator {
       if (!word.endsWith('s')) {
         keywords.add(word + 's')
       }
+      
+      // Ajouter variantes pour les mots accentués
+      const deaccented = word
+        .replace(/é|è|ê|ë/g, 'e')
+        .replace(/à|â|ä/g, 'a')
+        .replace(/ù|û|ü/g, 'u')
+        .replace(/ô|ö/g, 'o')
+        .replace(/ï|î/g, 'i')
+      if (deaccented !== word) {
+        keywords.add(deaccented)
+      }
     })
     
-    return Array.from(keywords)
+    return Array.from(keywords).slice(0, 6) // Limiter à 6 mots-clés max
   }
 
   // Comparer les données du RAG avec les données web pour détecter les conflits

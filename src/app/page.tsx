@@ -11,6 +11,8 @@ import { Badge } from '@/components/ui/badge'
 import { Send, Bot, User, GraduationCap, FileText, BarChart3, Sparkles, Zap, Shield, ThumbsUp, ThumbsDown, UserCircle } from 'lucide-react'
 import { Timestamp } from '@/components/Timestamp'
 import { SessionManager } from '@/lib/session'
+import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
 
 interface Message {
   id: string
@@ -536,9 +538,36 @@ export default function EnhancedESILVChatbot() {
                         {getAgentBadge(message.agentType)}
                       </div>
                       
-                      <p className="text-sm whitespace-pre-wrap leading-relaxed">
-                        {message.content}
-                      </p>
+                      <div className="text-sm leading-relaxed markdown-content">
+                        <ReactMarkdown 
+                          remarkPlugins={[remarkGfm]}
+                          components={{
+                            // Styles pour les différents éléments Markdown
+                            p: ({node, ...props}) => <p className="mb-3 last:mb-0" {...props} />,
+                            strong: ({node, ...props}) => <strong className="font-semibold text-slate-900" {...props} />,
+                            ul: ({node, ...props}) => <ul className="list-disc list-inside mb-3 space-y-1" {...props} />,
+                            ol: ({node, ...props}) => <ol className="list-decimal list-inside mb-3 space-y-1" {...props} />,
+                            li: ({node, ...props}) => <li className="ml-2" {...props} />,
+                            h1: ({node, ...props}) => <h1 className="text-xl font-bold mb-2 mt-4" {...props} />,
+                            h2: ({node, ...props}) => <h2 className="text-lg font-bold mb-2 mt-3" {...props} />,
+                            h3: ({node, ...props}) => <h3 className="text-md font-semibold mb-2 mt-2" {...props} />,
+                            code: ({node, inline, ...props}: any) => 
+                              inline 
+                                ? <code className="bg-slate-100 text-slate-800 px-1.5 py-0.5 rounded text-xs font-mono" {...props} />
+                                : <code className="block bg-slate-100 text-slate-800 p-3 rounded-lg text-xs font-mono overflow-x-auto mb-3" {...props} />,
+                            blockquote: ({node, ...props}) => <blockquote className="border-l-4 border-slate-300 pl-4 italic my-3" {...props} />,
+                            a: ({node, ...props}) => <a className="text-blue-600 hover:text-blue-800 underline" {...props} target="_blank" rel="noopener noreferrer" />,
+                            table: ({node, ...props}) => <table className="min-w-full border-collapse border border-slate-300 my-3" {...props} />,
+                            thead: ({node, ...props}) => <thead className="bg-slate-100" {...props} />,
+                            tbody: ({node, ...props}) => <tbody {...props} />,
+                            tr: ({node, ...props}) => <tr className="border-b border-slate-200" {...props} />,
+                            th: ({node, ...props}) => <th className="border border-slate-300 px-4 py-2 text-left font-semibold" {...props} />,
+                            td: ({node, ...props}) => <td className="border border-slate-300 px-4 py-2" {...props} />,
+                          }}
+                        >
+                          {message.content}
+                        </ReactMarkdown>
+                      </div>
                       
                       {/* Confidence Badge - Only for assistant messages */}
                       {message.role === 'assistant' && message.confidence !== undefined && (
