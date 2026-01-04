@@ -220,26 +220,46 @@ async function seedKnowledgeBaseV2() {
   try {
     console.log('🔄 Début de l\'ingestion des données ESILV COMPLÈTES V2...\n')
 
-    // Vider la base existante pour éviter les doublons
-    console.log('🗑️  Suppression des données existantes...')
-    await prisma.knowledgeBase.deleteMany({})
-    console.log('✅ Base nettoyée\n')
+    // ⚠️ NE PLUS VIDER LA BASE - Ajouter seulement les nouvelles entrées
+    // console.log('🗑️  Suppression des données existantes...')
+    // await prisma.knowledgeBase.deleteMany({})
+    // console.log('✅ Base nettoyée\n')
 
     // Compter les entrées à ajouter
     console.log(`📝 ${esilvCompleteData.length} entrées préparées`)
 
-    // Insérer toutes les entrées
+    // Insérer les entrées en vérifiant les doublons
     let inserted = 0
+    let skipped = 0
+    
     for (const entry of esilvCompleteData) {
       try {
-        await prisma.knowledgeBase.create({
-          data: entry
+        // Vérifier si l'entrée existe déjà
+        const existing = await prisma.knowledgeBase.findFirst({
+          where: {
+            question: entry.question,
+            category: entry.category
+          }
         })
-        inserted++
+
+        if (existing) {
+          skipped++
+          console.log(`⏭️  Déjà présent: ${entry.question.substring(0, 60)}...`)
+        } else {
+          await prisma.knowledgeBase.create({
+            data: entry
+          })
+          inserted++
+          console.log(`✅ Ajouté: ${entry.question.substring(0, 60)}...`)
+        }
       } catch (error) {
-        console.error(`Erreur lors de l'insertion: ${error.message}`)
+        console.error(`❌ Erreur: ${error.message}`)
       }
     }
+    
+    console.log(`\n📊 Résumé de l'ajout:`)
+    console.log(`   ✅ Nouvelles entrées: ${inserted}`)
+    console.log(`   ⏭️  Entrées déjà présentes: ${skipped}`)
 
     const finalCount = await prisma.knowledgeBase.count()
     

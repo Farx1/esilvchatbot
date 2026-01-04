@@ -115,15 +115,18 @@ cp .env.example .env
 # 4. Initialiser la base de données
 npm run db:push
 
-# 5. Charger les données ESILV (125+ entrées)
+# 5. ⚠️ IMPORTANT : Enrichir la base de connaissances AVANT de lancer l'app
+# Charger les données ESILV (125+ entrées manuelles)
 node scripts/seed-esilv-complete-v2.js
 
-# 6. (Optionnel) Enrichir avec 200+ URLs ESILV
+# Enrichir avec 200+ URLs ESILV (recommandé)
 node scripts/update-rag-with-urls.js
 
-# 7. Lancer le serveur
+# 6. Lancer le serveur
 npm run dev
 ```
+
+> **⚠️ Important** : Il est **obligatoire** d'exécuter les scripts de seed (`update-rag-with-urls.js`) **AVANT** de lancer l'application pour la première fois. Sinon, la base de connaissances sera vide et le chatbot ne pourra pas répondre correctement.
 
 L'application sera disponible sur **http://localhost:3000**
 

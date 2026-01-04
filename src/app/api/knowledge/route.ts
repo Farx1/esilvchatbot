@@ -33,7 +33,7 @@ export async function GET(request: NextRequest) {
     } else {
       items = await db.knowledgeBase.findMany({
         orderBy: { createdAt: 'desc' },
-        take: 100 // Limit for performance
+        take: 500 // Augmenté de 100 à 500 pour afficher plus d'entrées
       })
     }
 
