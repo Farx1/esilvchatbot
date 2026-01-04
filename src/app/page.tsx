@@ -207,10 +207,8 @@ export default function EnhancedESILVChatbot() {
       const fullText = data.response
       let currentIndex = 0
       
-      // Calculer un score de confiance basé sur les sources RAG
-      const confidence = data.ragSources && data.ragSources.length > 0
-        ? data.ragSources.reduce((acc: number, source: any) => acc + (source.confidence || 0.8), 0) / data.ragSources.length
-        : data.agentType === 'scraper' ? 0.9 : 0.85 // Par défaut: scraper=0.9, autres=0.85
+      // Utiliser le niveau de confiance calculé par le backend (dynamique et en temps réel)
+      const confidence = data.confidence !== undefined ? data.confidence : 0.8 // Fallback à 0.8 si non fourni
       
       const streamInterval = setInterval(() => {
         if (currentIndex < fullText.length) {

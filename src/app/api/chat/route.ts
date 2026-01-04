@@ -23,6 +23,7 @@ interface ChatResponse {
   agentType: AgentType
   showForm?: boolean
   isStreaming?: boolean
+  confidence?: number  // Score de confiance 0-1 calculé dynamiquement
   ragSources?: Array<{
     question: string
     answer: string
@@ -42,6 +43,60 @@ class ChatOrchestrator {
 
   async initialize() {
     // AI Orchestrator is already initialized
+  }
+
+  // Calcule le niveau de confiance en fonction de la qualité des sources
+  calculateConfidence(
+    sources: any[], 
+    usedScraper: boolean, 
+    dataAge: number = 0
+  ): number {
+    // Facteurs de confiance
+    let confidence = 0.5 // Base confidence
+    
+    // 1. Nombre de sources trouvées (max +0.3)
+    if (sources.length >= 3) {
+      confidence += 0.3
+    } else if (sources.length === 2) {
+      confidence += 0.2
+    } else if (sources.length === 1) {
+      confidence += 0.1
+    }
+    
+    // 2. Score de pertinence moyen (max +0.25)
+    if (sources.length > 0) {
+      const avgRelevance = sources.reduce((sum, src) => {
+        return sum + (src.relevanceScore || 0)
+      }, 0) / sources.length
+      
+      // Normaliser le score (supposons max 10)
+      confidence += (avgRelevance / 10) * 0.25
+    }
+    
+    // 3. Fraîcheur des données (max +0.15)
+    if (dataAge === 0) {
+      confidence += 0.15 // Données scrapées en temps réel
+    } else if (dataAge <= 7) {
+      confidence += 0.12 // Moins d'une semaine
+    } else if (dataAge <= 30) {
+      confidence += 0.08 // Moins d'un mois
+    } else if (dataAge <= 90) {
+      confidence += 0.04 // Moins de 3 mois
+    }
+    // Sinon, pas de bonus
+    
+    // 4. Pénalité si aucun résultat RAG et scraper échoué
+    if (sources.length === 0 && !usedScraper) {
+      confidence = 0.3 // Très faible confiance
+    }
+    
+    // 5. Bonus si données vérifiées par scraper
+    if (usedScraper) {
+      confidence += 0.1
+    }
+    
+    // Limiter entre 0 et 1
+    return Math.max(0, Math.min(1, confidence))
   }
 
   // Enhanced agent determination with context awareness
@@ -84,7 +139,7 @@ class ChatOrchestrator {
   }
 
   // Enhanced retrieval with better ESILV knowledge
-  async handleRetrieval(message: string, conversationHistory: any[] = []): Promise<{ response: string; agentType: AgentType; ragSources?: any[] }> {
+  async handleRetrieval(message: string, conversationHistory: any[] = []): Promise<{ response: string; agentType: AgentType; confidence?: number; ragSources?: any[] }> {
     await this.initialize()
 
     // Build context from conversation history (limité pour éviter un contexte trop long)
@@ -382,10 +437,25 @@ class ChatOrchestrator {
       
       // Retourner le bon agentType selon la source utilisée
       const agentType = (needsRecentInfo || needsWebVerification) && webResults ? 'scraper' : 'retrieval'
+      
+      // Calculer l'âge des données
+      let dataAge = 0
+      if (sources.length > 0) {
+        const oldestSource = sources[0]
+        const lastVerified = oldestSource.lastVerified ? new Date(oldestSource.lastVerified) : new Date(oldestSource.createdAt)
+        dataAge = Math.floor((new Date().getTime() - lastVerified.getTime()) / (1000 * 60 * 60 * 24))
+      }
+      
+      // Calculer le niveau de confiance dynamiquement
+      const usedScraper = (needsRecentInfo || needsWebVerification) && webResults ? true : false
+      const confidence = this.calculateConfidence(sources, usedScraper, dataAge)
+      
+      console.log(`📊 Niveau de confiance calculé: ${Math.round(confidence * 100)}% (sources: ${sources.length}, âge: ${dataAge}j, scraper: ${usedScraper})`)
 
       return {
         response: response || 'Désolé, je ne peux pas répondre à cette question pour le moment.',
         agentType: agentType,
+        confidence: confidence,
         ragSources: sources
       }
     } catch (error) {
@@ -393,13 +463,14 @@ class ChatOrchestrator {
       return {
         response: 'Je rencontre des difficultés techniques. Veuillez réessayer plus tard.',
         agentType: 'retrieval',
+        confidence: 0.2, // Très faible confiance en cas d'erreur
         ragSources: []
       }
     }
   }
 
   // Enhanced form filling agent
-  async handleFormFilling(message: string, conversationHistory: any[] = []): Promise<{ response: string; agentType: AgentType; showForm: boolean }> {
+  async handleFormFilling(message: string, conversationHistory: any[] = []): Promise<{ response: string; agentType: AgentType; confidence?: number; showForm: boolean }> {
     await this.initialize()
 
     const prompt = `
@@ -427,6 +498,7 @@ class ChatOrchestrator {
       return {
         response: response || 'Je vais recueillir vos coordonnées pour vous contacter.',
         agentType: 'form_filling',
+        confidence: 0.95, // Haute confiance pour les formulaires (processus standardisé)
         showForm: true
       }
     } catch (error) {
@@ -434,13 +506,14 @@ class ChatOrchestrator {
       return {
         response: 'Je vais recueillir vos coordonnées pour que notre équipe puisse vous contacter.',
         agentType: 'form_filling',
+        confidence: 0.8,
         showForm: true
       }
     }
   }
 
   // Enhanced orchestration agent with memory
-  async handleOrchestration(message: string, conversationHistory: any[] = []): Promise<{ response: string; agentType: AgentType }> {
+  async handleOrchestration(message: string, conversationHistory: any[] = []): Promise<{ response: string; agentType: AgentType; confidence?: number }> {
     await this.initialize()
 
     // Build conversation context (limité pour éviter un contexte trop long)
@@ -519,13 +592,15 @@ class ChatOrchestrator {
       response = this.fixMarkdownLineBreaks(response)
       return {
         response: response || 'Comment puis-je vous aider concernant ESILV ?',
-        agentType: 'orchestration'
+        agentType: 'orchestration',
+        confidence: 0.85 // Confiance moyenne pour les réponses générales
       }
     } catch (error) {
       console.error('Error in orchestration agent:', error)
       return {
         response: 'Je suis là pour vous aider avec des informations sur ESILV. Que souhaitez-vous savoir ?',
-        agentType: 'orchestration'
+        agentType: 'orchestration',
+        confidence: 0.7
       }
     }
   }
