@@ -168,14 +168,30 @@ export default function RAGViewer() {
       const formData = new FormData()
       formData.append('file', file)
 
+      console.log('📤 Uploading file:', file.name, 'Size:', file.size)
+
       const response = await fetch('/api/documents/upload', {
         method: 'POST',
         body: formData
       })
 
+      console.log('📥 Response received:', response.status, response.statusText)
+
+      // Check if response is JSON
+      const contentType = response.headers.get('content-type')
+      console.log('Content-Type:', contentType)
+
+      if (!contentType || !contentType.includes('application/json')) {
+        const text = await response.text()
+        console.error('❌ Non-JSON response:', text.substring(0, 500))
+        throw new Error('Server returned non-JSON response (possibly an error page)')
+      }
+
       const data = await response.json()
+      console.log('📦 Response data:', data)
 
       if (response.ok && data.success) {
+        console.log('✅ Upload successful!')
         setUploadStatus({
           uploading: false,
           success: true,
@@ -190,16 +206,17 @@ export default function RAGViewer() {
           setUploadStatus({ uploading: false, success: false, error: null, filename: null })
         }, 3000)
       } else {
+        console.error('❌ Upload failed:', data.error)
         setUploadStatus({
           uploading: false,
           success: false,
-          error: data.error || 'Erreur lors de l\'upload',
+          error: data.error || data.message || 'Erreur lors de l\'upload',
           filename: file.name
         })
         setTimeout(() => setUploadStatus({ uploading: false, success: false, error: null, filename: null }), 5000)
       }
     } catch (error) {
-      console.error('Upload error:', error)
+      console.error('❌ Upload error:', error)
       setUploadStatus({
         uploading: false,
         success: false,
