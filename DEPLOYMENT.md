@@ -1,10 +1,14 @@
 # 🚀 Guide de Déploiement sur Vercel
 
+**Version du projet :** v1.2.0  
+**Dernière mise à jour :** 2026-01-04
+
 ## Prérequis
 
 - Compte Vercel (gratuit)
 - Compte GitHub
-- Projet poussé sur GitHub
+- Projet poussé sur GitHub : [Farx1/esilvchatbot](https://github.com/Farx1/esilvchatbot)
+- Base de données PostgreSQL (Supabase/Neon/Railway recommandé)
 
 ## 📋 Étapes de Déploiement
 
@@ -131,9 +135,12 @@ Une fois déployé :
 
 ### 6. Base de Données
 
-⚠️ **Important** : SQLite ne fonctionne pas bien sur Vercel (système de fichiers éphémère).
+⚠️ **IMPORTANT** : SQLite ne fonctionne PAS sur Vercel (système de fichiers éphémère).  
+⚠️ **PostgreSQL est OBLIGATOIRE** pour le déploiement Vercel.
 
-Pour la production, vous devriez :
+**Raison :** Vercel utilise des fonctions serverless avec un système de fichiers en lecture seule. SQLite nécessite un accès en écriture au fichier `.db`, ce qui n'est pas possible.
+
+Pour la production, vous devez utiliser :
 
 #### Option A : Utiliser Vercel Postgres
 
@@ -172,11 +179,15 @@ npm run db:push
 Après le déploiement, vérifiez :
 
 - [ ] Le chatbot fonctionne sur `/`
+- [ ] Le health check affiche "En ligne" (si tous les services sont OK)
 - [ ] La page de login admin est accessible sur `/admin/login`
 - [ ] Les routes admin redirigent vers le login si non authentifié
 - [ ] L'authentification admin fonctionne
 - [ ] Les analytics s'affichent correctement
 - [ ] Le RAG Viewer fonctionne
+- [ ] L'upload de documents fonctionne (drag & drop)
+- [ ] Le scraping web retourne des actualités récentes
+- [ ] Les citations de sources apparaissent dans les réponses
 
 ### 8. Monitoring
 
@@ -234,15 +245,52 @@ npm run db:push
 node scripts/seed-esilv-complete-v2.js
 ```
 
+## 📊 Fonctionnalités en Production
+
+### ✅ Opérationnelles
+
+- Chatbot multi-agents (RAG, Scraper, Form, Orchestration)
+- Base de connaissances 125+ entrées + 200+ URLs ESILV
+- Upload de documents (PDF, DOCX, TXT, MD) jusqu'à 50MB
+- Scraping web automatique avec mise à jour RAG
+- Health check et monitoring
+- Citations de sources obligatoires
+- Badges de confiance
+- Analytics avancés
+- Interface admin protégée
+
+### ⚠️ Limitations Vercel
+
+- **Ollama NON supporté** (nécessite serveur local/dédié)
+- **Utiliser Gemini/OpenAI/Claude** en production
+- **SQLite NON supporté** (utiliser PostgreSQL)
+- **Timeout** : 10s pour Edge Functions, 60s pour Serverless (hobby plan)
+
+### 💡 Recommandations Production
+
+1. **Database** : Supabase PostgreSQL (gratuit, performant)
+2. **AI Provider** : Google Gemini (gratuit 2M tokens/mois)
+3. **CDN** : Vercel (inclus)
+4. **Monitoring** : Vercel Analytics (inclus)
+5. **Domaine** : Configurer un domaine personnalisé
+
+---
+
 ## 📞 Support
 
 Pour toute question :
 
-- 📧 Email : votre-email@example.com
-- 🐛 Issues : https://github.com/Farx1/esilvchatbot/issues
-- 📚 Docs : Voir `docs/` dans le repository
+- 📧 **Email** : julesbarth13@gmail.com
+- 🐛 **Issues** : [github.com/Farx1/esilvchatbot/issues](https://github.com/Farx1/esilvchatbot/issues)
+- 📚 **Docs** : Voir `docs/` dans le repository
+- 💼 **LinkedIn** : [jules-barth](https://www.linkedin.com/in/jules-barth)
+- 🌐 **Portfolio** : [julesbarth-myportfolio.fr](https://julesbarth-myportfolio.fr)
 
 ---
+
+**Version :** v1.2.0  
+**Dernière mise à jour :** 2026-01-04  
+**Auteur :** Jules Barth
 
 **Bon déploiement ! 🚀**
 
