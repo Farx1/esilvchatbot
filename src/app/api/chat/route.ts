@@ -253,20 +253,29 @@ class ChatOrchestrator {
        - ${needsRecentInfo ? 'Mentionner les tags/catégories (ex: hackathon, cybersécurité)' : 'Rester factuel et précis'}
        - Conclusion courte + question ouverte pour continuer la conversation
        
-       📝 FORMAT MARKDOWN OBLIGATOIRE:
+       📝 FORMAT MARKDOWN OBLIGATOIRE - RÈGLE CRITIQUE:
+       
+       ⚠️ TU DOIS ABSOLUMENT METTRE UN RETOUR À LA LIGNE APRÈS CHAQUE ÉLÉMENT DE LISTE ⚠️
+       
        - Titres de section: **Texte en gras:** (avec double astérisque ET deux-points)
-       - CHAQUE élément de liste doit être sur UNE LIGNE SÉPARÉE avec un retour à la ligne
+       - CHAQUE élément de liste = UNE NOUVELLE LIGNE (appuie sur ENTRÉE après chaque item)
        - Liste à puces: • (bullet) OU - (tiret) au DÉBUT de chaque ligne
        - Ligne vide entre les sections
        
-       ❌ MAUVAIS (tout sur une ligne):
-       "**Informatique & Data:** • Item 1 • Item 2 • Item 3"
+       ❌ INTERDIT - Tout sur une ligne:
+       "**Informatique:** • Item 1 • Item 2 • Item 3"
        
-       ✅ BON (une ligne par item):
-       "**Informatique & Data:**
+       ✅ OBLIGATOIRE - Un item par ligne (avec \n entre chaque):
+       "**Informatique:**
        • Item 1
-       • Item 2
-       • Item 3"
+       • Item 2  
+       • Item 3
+       
+       **Finance:**
+       • Item A
+       • Item B"
+       
+       🔴 SI TU NE METS PAS DE RETOURS À LA LIGNE, LE FORMAT SERA CASSÉ 🔴
     
     4. **Citations obligatoires**:
        ${needsRecentInfo || needsWebVerification ? '🔴 Pour CHAQUE fait, cite la source : [Source: URL_exacte]' : 'Cite les sources quand disponibles : [Source: URL]'}
@@ -531,22 +540,52 @@ class ChatOrchestrator {
         ]
       })
       
-      const results = await db.knowledgeBase.findMany({
+      // Récupérer plus de résultats pour faire du scoring
+      let results = await db.knowledgeBase.findMany({
         where: {
           OR: searchConditions
         },
-        orderBy: [
-          { createdAt: 'desc' } // Prioriser les entrées les plus récentes (plus pertinentes)
-        ],
-        take: 10 // Augmenté pour avoir plus de résultats
+        take: 30 // Récupérer 30 résultats pour scorer
       })
       
-      console.log(`📊 RAG: ${results.length} résultat(s) trouvé(s)`)
+      // Scorer les résultats par nombre de mots-clés matchés
+      const scoredResults = results.map(result => {
+        let score = 0
+        const questionLower = result.question.toLowerCase()
+        const answerLower = result.answer.toLowerCase()
+        const categoryLower = result.category.toLowerCase()
+        
+        keywords.forEach(keyword => {
+          const keywordLower = keyword.toLowerCase()
+          // +3 points si le mot-clé est dans la question
+          if (questionLower.includes(keywordLower)) score += 3
+          // +2 points si le mot-clé est dans la catégorie
+          if (categoryLower.includes(keywordLower)) score += 2
+          // +1 point si le mot-clé est dans la réponse
+          if (answerLower.includes(keywordLower)) score += 1
+        })
+        
+        // Bonus si confidence élevée
+        if (result.confidence && result.confidence > 0.9) score += 1
+        
+        return { ...result, relevanceScore: score }
+      })
       
-      if (results.length > 0) {
-        console.log(`   Premiers résultats:`)
-        results.slice(0, 3).forEach(r => {
-          console.log(`   - ${r.question.substring(0, 60)}...`)
+      // Trier par score de pertinence décroissant
+      scoredResults.sort((a, b) => (b.relevanceScore || 0) - (a.relevanceScore || 0))
+      
+      // Prendre les 5 meilleurs
+      results = scoredResults.slice(0, 5).map(r => {
+        const { relevanceScore, ...rest } = r
+        return rest
+      })
+      
+      console.log(`📊 RAG: ${scoredResults.length} résultat(s) trouvé(s), top 5 sélectionnés par pertinence`)
+      
+      if (scoredResults.length > 0) {
+        console.log(`   Meilleurs résultats (par score):`)
+        scoredResults.slice(0, 3).forEach(r => {
+          console.log(`   - [Score: ${r.relevanceScore}] ${r.question.substring(0, 50)}...`)
         })
       }
 
