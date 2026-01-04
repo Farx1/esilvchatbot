@@ -19,6 +19,7 @@ interface Message {
   agentType?: string
   timestamp: Date
   feedback?: 'positive' | 'negative' | 'neutral' | null
+  confidence?: number // Score de confiance (0-1)
 }
 
 export default function EnhancedESILVChatbot() {
@@ -99,6 +100,34 @@ export default function EnhancedESILVChatbot() {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }
 
+  // Health check hook - poll every 30 seconds
+  const [healthStatus, setHealthStatus] = useState<'healthy' | 'degraded' | 'down' | 'checking'>('checking')
+
+  useEffect(() => {
+    const checkHealth = async () => {
+      try {
+        const response = await fetch('/api/health')
+        if (response.ok) {
+          const data = await response.json()
+          setHealthStatus(data.status)
+        } else {
+          setHealthStatus('down')
+        }
+      } catch (error) {
+        console.error('Health check failed:', error)
+        setHealthStatus('down')
+      }
+    }
+
+    // Initial check
+    checkHealth()
+
+    // Poll every 30 seconds
+    const interval = setInterval(checkHealth, 30000)
+
+    return () => clearInterval(interval)
+  }, [])
+
   const handleFeedback = async (messageId: string, feedback: 'up' | 'down') => {
     setFeedbackStates(prev => ({ ...prev, [messageId]: feedback }))
     
@@ -176,6 +205,11 @@ export default function EnhancedESILVChatbot() {
       const fullText = data.response
       let currentIndex = 0
       
+      // Calculer un score de confiance basé sur les sources RAG
+      const confidence = data.ragSources && data.ragSources.length > 0
+        ? data.ragSources.reduce((acc: number, source: any) => acc + (source.confidence || 0.8), 0) / data.ragSources.length
+        : data.agentType === 'scraper' ? 0.9 : 0.85 // Par défaut: scraper=0.9, autres=0.85
+      
       const streamInterval = setInterval(() => {
         if (currentIndex < fullText.length) {
           const chunkSize = Math.min(3, fullText.length - currentIndex) // 3 caractères à la fois
@@ -183,7 +217,7 @@ export default function EnhancedESILVChatbot() {
           
           setMessages(prev => prev.map(msg => 
             msg.id === assistantMessageId 
-              ? { ...msg, content: fullText.substring(0, currentIndex), agentType: data.agentType, isStreaming: true }
+              ? { ...msg, content: fullText.substring(0, currentIndex), agentType: data.agentType, confidence: confidence, isStreaming: true }
               : msg
           ))
         } else {
@@ -355,13 +389,45 @@ export default function EnhancedESILVChatbot() {
           <div className="bg-gradient-to-r from-blue-600 to-purple-600 p-4 text-white">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <motion.div
-                  animate={{ pulse: [1, 1.2, 1] }}
-                  transition={{ duration: 2, repeat: Infinity }}
-                >
-                  <div className="w-3 h-3 bg-green-400 rounded-full"></div>
-                </motion.div>
-                <span className="font-medium">En ligne - Prêt à vous aider</span>
+                {healthStatus === 'healthy' && (
+                  <>
+                    <motion.div
+                      animate={{ pulse: [1, 1.2, 1] }}
+                      transition={{ duration: 2, repeat: Infinity }}
+                    >
+                      <div className="w-3 h-3 bg-green-400 rounded-full"></div>
+                    </motion.div>
+                    <span className="font-medium">En ligne - Prêt à vous aider</span>
+                  </>
+                )}
+                {healthStatus === 'degraded' && (
+                  <>
+                    <motion.div
+                      animate={{ pulse: [1, 1.2, 1] }}
+                      transition={{ duration: 2, repeat: Infinity }}
+                    >
+                      <div className="w-3 h-3 bg-yellow-400 rounded-full"></div>
+                    </motion.div>
+                    <span className="font-medium text-yellow-200">Services partiellement disponibles</span>
+                  </>
+                )}
+                {healthStatus === 'down' && (
+                  <>
+                    <div className="w-3 h-3 bg-red-400 rounded-full"></div>
+                    <span className="font-medium text-red-200">Services indisponibles</span>
+                  </>
+                )}
+                {healthStatus === 'checking' && (
+                  <>
+                    <motion.div
+                      animate={{ rotate: 360 }}
+                      transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
+                    >
+                      <div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full"></div>
+                    </motion.div>
+                    <span className="font-medium">Vérification...</span>
+                  </>
+                )}
               </div>
               <div className="flex gap-2">
                 <Badge variant="secondary" className="bg-white/20 text-white border-white/30">
@@ -473,6 +539,26 @@ export default function EnhancedESILVChatbot() {
                       <p className="text-sm whitespace-pre-wrap leading-relaxed">
                         {message.content}
                       </p>
+                      
+                      {/* Confidence Badge - Only for assistant messages */}
+                      {message.role === 'assistant' && message.confidence !== undefined && (
+                        <div className="mt-3 flex items-center gap-2">
+                          <Badge 
+                            variant="outline" 
+                            className={`text-xs ${
+                              message.confidence > 0.9 
+                                ? 'bg-green-50 text-green-700 border-green-200' 
+                                : message.confidence > 0.7 
+                                ? 'bg-yellow-50 text-yellow-700 border-yellow-200' 
+                                : 'bg-red-50 text-red-700 border-red-200'
+                            }`}
+                          >
+                            {message.confidence > 0.9 && <Shield className="h-3 w-3 mr-1" />}
+                            {message.confidence > 0.9 ? 'Très fiable' : message.confidence > 0.7 ? 'À vérifier' : 'Incertain'}
+                            {' '}({Math.round(message.confidence * 100)}%)
+                          </Badge>
+                        </div>
+                      )}
                       
                       <p className="text-xs opacity-70 mt-2">
                         <Timestamp timestamp={message.timestamp} />

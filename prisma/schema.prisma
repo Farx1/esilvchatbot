@@ -81,6 +81,10 @@ model KnowledgeBase {
   confidence    Float?
   source        String?  // URL source de l'information
   lastVerified  DateTime @default(now()) // Dernière vérification via scraper
+  documentName  String?  // Nom du fichier source (pour documents uploadés)
+  documentType  String?  // pdf, docx, txt, md
+  uploadedAt    DateTime? // Date d'upload du document
+  chunkIndex    Int?     // Position du chunk dans le document
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 }

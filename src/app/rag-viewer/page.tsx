@@ -7,7 +7,7 @@ import { ScrollArea } from '@/components/ui/scroll-area'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
-import { Search, Database, RefreshCw, Eye, Home, BarChart3, Shield, ArrowLeft } from 'lucide-react'
+import { Search, Database, RefreshCw, Eye, Home, BarChart3, Shield, ArrowLeft, Upload, FileText, CheckCircle, XCircle } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 
 interface KnowledgeEntry {
@@ -17,6 +17,14 @@ interface KnowledgeEntry {
   category: string
   confidence: number
   createdAt: string
+}
+
+interface UploadStatus {
+  uploading: boolean
+  success: boolean
+  error: string | null
+  filename: string | null
+  chunksAdded?: number
 }
 
 export default function RAGViewer() {
@@ -29,6 +37,13 @@ export default function RAGViewer() {
   const [stats, setStats] = useState({
     total: 0,
     categories: {} as Record<string, number>
+  })
+  const [isDragging, setIsDragging] = useState(false)
+  const [uploadStatus, setUploadStatus] = useState<UploadStatus>({
+    uploading: false,
+    success: false,
+    error: null,
+    filename: null
   })
 
   useEffect(() => {
@@ -93,6 +108,106 @@ export default function RAGViewer() {
       'identity': 'bg-red-500'
     }
     return colors[category] || 'bg-gray-500'
+  }
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault()
+    setIsDragging(true)
+  }
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault()
+    setIsDragging(false)
+  }
+
+  const handleDrop = async (e: React.DragEvent) => {
+    e.preventDefault()
+    setIsDragging(false)
+
+    const files = Array.from(e.dataTransfer.files)
+    if (files.length === 0) return
+
+    const file = files[0]
+    
+    // Vérifier le type de fichier
+    const validTypes = ['.pdf', '.docx', '.txt', '.md']
+    const fileExtension = '.' + file.name.split('.').pop()?.toLowerCase()
+    
+    if (!validTypes.includes(fileExtension)) {
+      setUploadStatus({
+        uploading: false,
+        success: false,
+        error: `Type de fichier non supporté. Utilisez: ${validTypes.join(', ')}`,
+        filename: file.name
+      })
+      setTimeout(() => setUploadStatus({ uploading: false, success: false, error: null, filename: null }), 5000)
+      return
+    }
+
+    // Vérifier la taille (10MB max)
+    if (file.size > 10 * 1024 * 1024) {
+      setUploadStatus({
+        uploading: false,
+        success: false,
+        error: 'Fichier trop volumineux (max 10MB)',
+        filename: file.name
+      })
+      setTimeout(() => setUploadStatus({ uploading: false, success: false, error: null, filename: null }), 5000)
+      return
+    }
+
+    // Upload
+    setUploadStatus({
+      uploading: true,
+      success: false,
+      error: null,
+      filename: file.name
+    })
+
+    try {
+      const formData = new FormData()
+      formData.append('file', file)
+
+      const response = await fetch('/api/documents/upload', {
+        method: 'POST',
+        body: formData
+      })
+
+      const data = await response.json()
+
+      if (response.ok && data.success) {
+        setUploadStatus({
+          uploading: false,
+          success: true,
+          error: null,
+          filename: file.name,
+          chunksAdded: data.chunks
+        })
+        
+        // Rafraîchir la base de connaissances
+        setTimeout(() => {
+          fetchKnowledgeBase()
+          setUploadStatus({ uploading: false, success: false, error: null, filename: null })
+        }, 3000)
+      } else {
+        setUploadStatus({
+          uploading: false,
+          success: false,
+          error: data.error || 'Erreur lors de l\'upload',
+          filename: file.name
+        })
+        setTimeout(() => setUploadStatus({ uploading: false, success: false, error: null, filename: null }), 5000)
+      }
+    } catch (error) {
+      console.error('Upload error:', error)
+      setUploadStatus({
+        uploading: false,
+        success: false,
+        error: 'Erreur réseau lors de l\'upload',
+        filename: file.name
+      })
+      setTimeout(() => setUploadStatus({ uploading: false, success: false, error: null, filename: null }), 5000)
+    }
   }
 
   return (
@@ -174,6 +289,88 @@ export default function RAGViewer() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Drag & Drop Upload Zone */}
+      <Card className={`border-2 border-dashed transition-all ${
+        isDragging 
+          ? 'border-blue-500 bg-blue-50 scale-105' 
+          : 'border-gray-300 hover:border-blue-400'
+      }`}>
+        <CardContent 
+          className="p-8"
+          onDragOver={handleDragOver}
+          onDragLeave={handleDragLeave}
+          onDrop={handleDrop}
+        >
+          <div className="flex flex-col items-center justify-center text-center">
+            {uploadStatus.uploading ? (
+              <motion.div
+                initial={{ opacity: 0, scale: 0.8 }}
+                animate={{ opacity: 1, scale: 1 }}
+                className="flex flex-col items-center"
+              >
+                <motion.div
+                  animate={{ rotate: 360 }}
+                  transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
+                >
+                  <Upload className="h-12 w-12 text-blue-500 mb-4" />
+                </motion.div>
+                <p className="text-lg font-semibold">Upload en cours...</p>
+                <p className="text-sm text-muted-foreground mt-2">{uploadStatus.filename}</p>
+              </motion.div>
+            ) : uploadStatus.success ? (
+              <motion.div
+                initial={{ opacity: 0, scale: 0.8 }}
+                animate={{ opacity: 1, scale: 1 }}
+                className="flex flex-col items-center"
+              >
+                <CheckCircle className="h-12 w-12 text-green-500 mb-4" />
+                <p className="text-lg font-semibold text-green-600">Upload réussi !</p>
+                <p className="text-sm text-muted-foreground mt-2">{uploadStatus.filename}</p>
+                <Badge variant="outline" className="mt-2">
+                  {uploadStatus.chunksAdded} chunk(s) ajouté(s) au RAG
+                </Badge>
+              </motion.div>
+            ) : uploadStatus.error ? (
+              <motion.div
+                initial={{ opacity: 0, scale: 0.8 }}
+                animate={{ opacity: 1, scale: 1 }}
+                className="flex flex-col items-center"
+              >
+                <XCircle className="h-12 w-12 text-red-500 mb-4" />
+                <p className="text-lg font-semibold text-red-600">Erreur d'upload</p>
+                <p className="text-sm text-muted-foreground mt-2">{uploadStatus.error}</p>
+              </motion.div>
+            ) : (
+              <motion.div
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="flex flex-col items-center"
+              >
+                <Upload className={`h-12 w-12 mb-4 transition-colors ${
+                  isDragging ? 'text-blue-500' : 'text-gray-400'
+                }`} />
+                <p className="text-lg font-semibold">
+                  {isDragging ? 'Déposez le fichier ici' : 'Glissez-déposez un document'}
+                </p>
+                <p className="text-sm text-muted-foreground mt-2">
+                  PDF, DOCX, TXT ou MD • Max 10MB
+                </p>
+                <div className="flex items-center gap-2 mt-4">
+                  <Badge variant="outline">
+                    <FileText className="h-3 w-3 mr-1" />
+                    Auto-ajout au RAG
+                  </Badge>
+                  <Badge variant="outline">
+                    <Database className="h-3 w-3 mr-1" />
+                    Chunking intelligent
+                  </Badge>
+                </div>
+              </motion.div>
+            )}
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Category Filter */}
       <Card>
