@@ -1,16 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
-import * as pdfParse from 'pdf-parse'
 import mammoth from 'mammoth'
 
 // Force Node.js runtime (required for pdf-parse and mammoth)
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
-// Helper function to parse PDF
+// Helper function to parse PDF with dynamic import
 async function parsePDF(buffer: ArrayBuffer): Promise<string> {
   try {
     console.log('🔍 Starting PDF parse, buffer size:', buffer.byteLength)
+    
+    // Dynamic import to avoid Next.js build issues
+    const pdfParse = (await import('pdf-parse')).default
+    
     const uint8Array = new Uint8Array(buffer)
     const data = await pdfParse(uint8Array)
     console.log('✅ PDF parsed successfully, text length:', data.text?.length || 0)
