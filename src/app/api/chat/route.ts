@@ -639,6 +639,13 @@ class ChatOrchestrator {
         take: 30 // Récupérer 30 résultats pour scorer
       })
       
+      // Fonction helper pour normaliser le texte (supprime espaces, tirets, apostrophes)
+      const normalize = (text: string) => {
+        return text.toLowerCase()
+          .replace(/[\s\-']/g, '')  // Supprime espaces, tirets, apostrophes
+          .normalize('NFD').replace(/[\u0300-\u036f]/g, '')  // Supprime accents
+      }
+      
       // Scorer les résultats par nombre de mots-clés matchés
       const scoredResults = results.map(result => {
         let score = 0
@@ -646,14 +653,27 @@ class ChatOrchestrator {
         const answerLower = result.answer.toLowerCase()
         const categoryLower = result.category.toLowerCase()
         
+        // Version normalisée pour matching flexible
+        const questionNormalized = normalize(result.question)
+        const answerNormalized = normalize(result.answer)
+        const categoryNormalized = normalize(result.category)
+        
         keywords.forEach(keyword => {
           const keywordLower = keyword.toLowerCase()
-          // +3 points si le mot-clé est dans la question
-          if (questionLower.includes(keywordLower)) score += 3
-          // +2 points si le mot-clé est dans la catégorie
-          if (categoryLower.includes(keywordLower)) score += 2
-          // +1 point si le mot-clé est dans la réponse
-          if (answerLower.includes(keywordLower)) score += 1
+          const keywordNormalized = normalize(keyword)
+          
+          // +5 points si le mot-clé est dans la question (exact ou normalisé)
+          if (questionLower.includes(keywordLower) || questionNormalized.includes(keywordNormalized)) {
+            score += 5
+          }
+          // +3 points si le mot-clé est dans la catégorie
+          if (categoryLower.includes(keywordLower) || categoryNormalized.includes(keywordNormalized)) {
+            score += 3
+          }
+          // +2 points si le mot-clé est dans la réponse
+          if (answerLower.includes(keywordLower) || answerNormalized.includes(keywordNormalized)) {
+            score += 2
+          }
         })
         
         // Bonus si confidence élevée
