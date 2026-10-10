@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
+import { ADMIN_COOKIE, ADMIN_SESSION_MAX_AGE_S, createAdminToken, verifyAdminToken } from '@/lib/admin-session'
 
 export async function POST(request: NextRequest) {
   try {
@@ -7,9 +8,10 @@ export async function POST(request: NextRequest) {
 
     // Vérifier le mot de passe admin depuis les variables d'environnement
     const adminPassword = process.env.ADMIN_PASSWORD
+    const sessionSecret = process.env.SESSION_SECRET
 
-    if (!adminPassword) {
-      console.error('⚠️ ADMIN_PASSWORD not set in environment variables')
+    if (!adminPassword || !sessionSecret) {
+      console.error('⚠️ ADMIN_PASSWORD or SESSION_SECRET not set in environment variables')
       return NextResponse.json(
         { error: 'Configuration serveur incorrecte' },
         { status: 500 }
@@ -20,11 +22,11 @@ export async function POST(request: NextRequest) {
       // Authentification réussie - créer un cookie sécurisé
       const cookieStore = await cookies()
       
-      cookieStore.set('admin-authenticated', 'true', {
+      cookieStore.set(ADMIN_COOKIE, await createAdminToken(sessionSecret), {
         httpOnly: true,
         secure: process.env.NODE_ENV === 'production',
         sameSite: 'strict',
-        maxAge: 60 * 60 * 24, // 24 heures
+        maxAge: ADMIN_SESSION_MAX_AGE_S,
         path: '/'
       })
 
@@ -54,10 +56,10 @@ export async function POST(request: NextRequest) {
 export async function GET() {
   try {
     const cookieStore = await cookies()
-    const adminAuth = cookieStore.get('admin-authenticated')
+    const token = cookieStore.get(ADMIN_COOKIE)?.value
 
     return NextResponse.json({
-      authenticated: adminAuth?.value === 'true'
+      authenticated: await verifyAdminToken(token, process.env.SESSION_SECRET)
     })
   } catch (error) {
     console.error('Auth check error:', error)
@@ -69,7 +71,7 @@ export async function GET() {
 export async function DELETE() {
   try {
     const cookieStore = await cookies()
-    cookieStore.delete('admin-authenticated')
+    cookieStore.delete(ADMIN_COOKIE)
 
     console.log('✅ Admin logged out')
 
