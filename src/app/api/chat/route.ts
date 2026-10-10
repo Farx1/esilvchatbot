@@ -2,6 +2,12 @@ import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { ChatOrchestrator as AIChatOrchestrator } from '@/app/api/ai-config/route'
 import { hasKeyword } from '@/lib/keyword-match'
+import { POST as knowledgePOST } from '@/app/api/knowledge/route'
+import { POST as ragUpdatesPOST } from '@/app/api/rag-updates/route'
+
+// Call write handlers in-process: no hardcoded localhost:3000 and no trip through the admin middleware
+const callRoute = (handler: (req: NextRequest) => Promise<Response>, path: string, body: unknown) =>
+  handler(new NextRequest(`http://internal${path}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }))
 
 // Agent types
 type AgentType = 'retrieval' | 'form_filling' | 'orchestration' | 'scraper'
@@ -992,14 +998,10 @@ class ChatOrchestrator {
       console.log('🔍 Détection de conflits avec l\'API find_conflicts...')
       
       // 1. Appeler l'API find_conflicts
-      const response = await fetch('http://localhost:3000/api/knowledge', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
+      const response = await callRoute(knowledgePOST, '/api/knowledge', {
           action: 'find_conflicts',
           newInfo: webData
         })
-      })
 
       if (!response.ok) {
         console.error('❌ Erreur API find_conflicts:', response.status)
@@ -1164,14 +1166,10 @@ class ChatOrchestrator {
       if (conflictResolution.entriesToDelete.length > 0) {
         console.log(`🗑️  Suppression de ${conflictResolution.entriesToDelete.length} entrées obsolètes...`)
         
-        const deleteResponse = await fetch('http://localhost:3000/api/knowledge', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
+        const deleteResponse = await callRoute(knowledgePOST, '/api/knowledge', {
             action: 'bulk_delete',
             ids: conflictResolution.entriesToDelete
           })
-        })
 
         if (deleteResponse.ok) {
           const deleteData = await deleteResponse.json()
@@ -1204,14 +1202,10 @@ class ChatOrchestrator {
           updatedAt: new Date()
         }))
 
-        const addResponse = await fetch('http://localhost:3000/api/knowledge', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
+        const addResponse = await callRoute(knowledgePOST, '/api/knowledge', {
             action: 'bulk_create',
             items: entriesToAdd
           })
-        })
 
         if (addResponse.ok) {
           const addData = await addResponse.json()
@@ -1262,10 +1256,7 @@ class ChatOrchestrator {
     confidence: number | null
   ): Promise<void> {
     try {
-      await fetch('http://localhost:3000/api/rag-updates', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
+      await callRoute(ragUpdatesPOST, '/api/rag-updates', {
           updateType,
           entryId,
           oldValue,
@@ -1275,7 +1266,6 @@ class ChatOrchestrator {
           confidence,
           triggeredBy: 'scraper'
         })
-      })
     } catch (error) {
       console.error('❌ Erreur lors du logging RAG update:', error)
       // Ne pas bloquer le flux principal si le logging échoue
