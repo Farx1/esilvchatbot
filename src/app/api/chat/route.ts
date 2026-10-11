@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { ChatOrchestrator as AIChatOrchestrator } from '@/app/api/ai-config/route'
+import { hasKeyword } from '@/lib/keyword-match'
 
 // Agent types
 type AgentType = 'retrieval' | 'form_filling' | 'orchestration' | 'scraper'
@@ -119,18 +120,16 @@ class ChatOrchestrator {
       'email', 'adresse', 'nom', 'prénom', 'information', 'formulaire'
     ]
     
-    const lowerMessage = message.toLowerCase()
-    
-    // Check for form filling intent
-    if (formFillingKeywords.some(keyword => lowerMessage.includes(keyword))) {
+    // ESILV knowledge questions win over form intent ("frais d'inscription", "informations sur les cours")
+    if (hasKeyword(message, [...retrievalKeywords, 'esilv', 'école'])) {
+      return 'retrieval'
+    }
+
+    if (hasKeyword(message, formFillingKeywords)) {
       return 'form_filling'
     }
-    
-    // Check for retrieval intent (ESILV-specific knowledge)
-    if (retrievalKeywords.some(keyword => lowerMessage.includes(keyword)) || 
-        lowerMessage.includes('esilv') || 
-        lowerMessage.includes('école') ||
-        isFollowUp) {
+
+    if (isFollowUp) {
       return 'retrieval'
     }
     
