@@ -1,19 +1,23 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { NextRequest } from 'next/server'
 
-// No real DB and no LLM call: Prisma and the provider orchestrator are mocked.
-const { db, generateCompletion } = vi.hoisted(() => ({
+// No real DB, no network, no LLM call: Prisma, the scraper and the provider orchestrator are mocked.
+// /api/knowledge and /api/rag-updates run for real (in-process) on the mocked Prisma.
+const { db, generateCompletion, scraperPOST } = vi.hoisted(() => ({
   db: {
-    knowledgeBase: { findMany: vi.fn() },
+    knowledgeBase: { findMany: vi.fn(), findFirst: vi.fn(), create: vi.fn(), createMany: vi.fn(), deleteMany: vi.fn() },
+    rAGUpdate: { create: vi.fn() },
     conversation: { findFirst: vi.fn(), create: vi.fn() },
     message: { create: vi.fn() },
   },
   generateCompletion: vi.fn(),
+  scraperPOST: vi.fn(),
 }))
 vi.mock('@/lib/db', () => ({ db }))
 vi.mock('@/app/api/ai-config/route', () => ({
   ChatOrchestrator: class { generateCompletion = generateCompletion },
 }))
+vi.mock('@/app/api/scraper/route', () => ({ POST: scraperPOST }))
 
 import { POST } from './route'
 
@@ -31,9 +35,11 @@ const kb = (question: string, answer: string, category = 'general') =>
 beforeEach(() => {
   vi.clearAllMocks()
   vi.spyOn(console, 'log').mockImplementation(() => {})
-  vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('no network in tests'))) // scraper fallback
+  scraperPOST.mockResolvedValue(Response.json({ results: [] }))
   generateCompletion.mockResolvedValue('ok')
   db.knowledgeBase.findMany.mockResolvedValue([])
+  db.knowledgeBase.findFirst.mockResolvedValue(null)
+  db.rAGUpdate.create.mockResolvedValue({ id: 'u1' })
   db.conversation.findFirst.mockResolvedValue({ id: 'c1' })
   db.message.create.mockImplementation(async ({ data }) => ({ id: data.id ?? 'm1' }))
 })
@@ -86,14 +92,36 @@ describe('RAG keyword search', () => {
     expect(body.ragSources[0].question).toBe('Quels sont les frais de scolarité ?')
     expect(body.ragSources[1].question).toBe('Transport')
     expect(generateCompletion.mock.calls[0][0]).toContain('R: 9 500 € par an')
-    expect(fetch).not.toHaveBeenCalled() // fresh RAG data: no scraper call
+    expect(scraperPOST).not.toHaveBeenCalled() // fresh RAG data: no scraper call
   })
 
   // Known bug: an empty search returns the non-empty "Aucune information..." text, so the
   // "fallback (RAG vide)" branch in handleRetrieval never runs. Drop `.fails` once fixed.
   it.fails('falls back to the scraper when the knowledge base has nothing', async () => {
     const body = await chat('Quels sont les frais de scolarité ?')
-    expect(fetch).toHaveBeenCalledWith('http://localhost:3000/api/scraper', expect.anything())
+    expect(scraperPOST).toHaveBeenCalled()
     expect(body.ragSources).toEqual([])
+  })
+
+  it('replaces a stale contact entry when the web disagrees, without any HTTP call', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch')
+    const tenDaysAgo = new Date(Date.now() - 10 * 24 * 3600 * 1000)
+    db.knowledgeBase.findMany.mockResolvedValue([{
+      ...kb('Qui est le responsable des admissions ?', 'Responsable Jean Dupont, bureau des admissions ESILV'),
+      id: 'old1', lastVerified: tenDaysAgo,
+    }])
+    scraperPOST.mockResolvedValue(Response.json({ results: [{
+      title: 'Admissions', url: 'https://www.esilv.fr/admissions',
+      content: 'Responsable Marie Martin, bureau des admissions ESILV',
+    }] }))
+
+    await chat('Qui est le responsable des admissions ?')
+
+    // background verification: conflict found -> /api/knowledge bulk_delete + /api/rag-updates log
+    await vi.waitFor(() => expect(db.rAGUpdate.create).toHaveBeenCalled())
+    expect(db.knowledgeBase.deleteMany).toHaveBeenCalledWith({ where: { id: { in: ['old1'] } } })
+    expect(db.rAGUpdate.create.mock.calls[0][0].data).toMatchObject({ updateType: 'delete', entryId: 'old1' })
+    expect(db.knowledgeBase.create.mock.calls[0][0].data).toMatchObject({ source: 'https://www.esilv.fr/admissions' }) // scraped page saved
+    expect(fetchSpy).not.toHaveBeenCalled()
   })
 })

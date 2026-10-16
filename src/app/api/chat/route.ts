@@ -4,6 +4,7 @@ import { ChatOrchestrator as AIChatOrchestrator } from '@/app/api/ai-config/rout
 import { hasKeyword } from '@/lib/keyword-match'
 import { POST as knowledgePOST } from '@/app/api/knowledge/route'
 import { POST as ragUpdatesPOST } from '@/app/api/rag-updates/route'
+import { POST as scraperPOST } from '@/app/api/scraper/route'
 
 // Call write handlers in-process: no hardcoded localhost:3000 and no trip through the admin middleware
 const callRoute = (handler: (req: NextRequest) => Promise<Response>, path: string, body: unknown) =>
@@ -1278,16 +1279,12 @@ class ChatOrchestrator {
       console.log('🌐 Appel du scraper web pour:', query)
       
       // Appeler l'API scraper avec la date et deep scraping activé
-      const response = await fetch('http://localhost:3000/api/scraper', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
+      const response = await callRoute(scraperPOST, '/api/scraper', {
           query,
           currentDate: currentDate?.toISOString(),
           deepScrape: true,  // Activer le deep scraping
           autoSave: false    // Ne pas sauvegarder automatiquement, l'orchestrateur décidera
         })
-      })
 
       if (!response.ok) {
         console.log('⚠️ Scraper API error:', response.status)

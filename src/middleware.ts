@@ -8,6 +8,7 @@ const ADMIN_METHODS: Record<string, string[]> = {
   '/api/rag-updates': ['POST', 'PUT', 'PATCH', 'DELETE'],
   '/api/ai-config': ['POST'],
   '/api/form-submit': ['GET'], // GET returns submitted personal data
+  '/api/scraper': ['POST'], // POST can write to the knowledge base (autoSave); the chat calls it in-process
 }
 
 export async function middleware(request: NextRequest) {
@@ -38,5 +39,6 @@ export const config = {
     '/api/rag-updates',
     '/api/ai-config',
     '/api/form-submit',
+    '/api/scraper',
   ],
 }
