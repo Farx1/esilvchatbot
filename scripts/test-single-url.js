@@ -3,6 +3,7 @@
  */
 
 const cheerio = require('cheerio');
+const { adminHeaders } = require('./admin-session');
 
 const testUrl = "https://www.esilv.fr/entreprises-debouches/reseau-des-anciens/";
 
@@ -58,7 +59,7 @@ async function scrapeAndAdd() {
     console.log(`\n📤 Envoi au RAG...`);
     const addResponse = await fetch('http://localhost:3000/api/knowledge', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: await adminHeaders(),
       body: JSON.stringify({
         action: 'create',
         item: pageData
