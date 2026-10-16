@@ -2,6 +2,7 @@
 
 Assistant intelligent pour l'École Supérieure d'Ingénieurs Léonard-de-Vinci (ESILV), développé avec Next.js, TypeScript et IA générative.
 
+[![CI](https://github.com/Farx1/esilvchatbot/actions/workflows/ci.yml/badge.svg)](https://github.com/Farx1/esilvchatbot/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![Next.js](https://img.shields.io/badge/Next.js-15.3.5-black)](https://nextjs.org/)
 
@@ -295,6 +296,8 @@ esilvchatbot/
 
 ### Guides Techniques
 
+- **[Architecture](docs/ARCHITECTURE.md)** : Flux d'une requête, routage, RAG, scraper (diagrammes)
+- **[Sécurité](SECURITY.md)** : Signaler une vulnérabilité, modèle de menace
 - **[Documentation Technique](docs/TECHNICAL_DOCUMENTATION.md)** : Architecture détaillée
 - **[Configuration AI Providers](docs/AI_PROVIDERS.md)** : Configuration des LLMs
 - **[Guide de Développement](docs/DEVELOPMENT.md)** : Contribuer au projet
@@ -349,30 +352,7 @@ Voir [CONTRIBUTING.md](CONTRIBUTING.md) pour plus de détails.
 
 ## 📝 Changelog
 
-### v1.2.0 (2026-01-04) - Upload de Documents
-
-- ✅ Upload de documents PDF, DOCX, TXT, MD via drag-and-drop
-- ✅ Parsing automatique avec pdf-parse-fork et mammoth
-- ✅ Chunking intelligent et intégration au RAG
-- ✅ Limite augmentée à 50MB par fichier
-- ✅ Health check API + status UI dynamique
-- ✅ Enrichissement RAG avec 200+ URLs ESILV
-- ✅ Badges de confiance sur les réponses
-- ✅ Script de validation automatisé
-
-### v1.1.0 (2025-12) - Scraping Intelligent
-
-- ✅ Scraping web automatique du site ESILV
-- ✅ Détection de conflits et mise à jour RAG
-- ✅ Citations de sources obligatoires
-- ✅ Vérification parallèle des données
-
-### v1.0.0 (2025-11) - Version Initiale
-
-- ✅ Routage par mots-clés (RAG, Form, Orchestration)
-- ✅ Interface chatbot complète
-- ✅ Support multi-LLM (Ollama, Gemini, OpenAI)
-- ✅ Base de connaissances initiale
+Voir [CHANGELOG.md](CHANGELOG.md).
 
 ---
 

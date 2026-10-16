@@ -23,8 +23,8 @@ Ce projet adhère à un code de conduite. En participant, vous vous engagez à m
 
 ```bash
 # Fork le repository sur GitHub, puis :
-git clone https://github.com/votre-username/llmgenaip.git
-cd llmgenaip
+git clone https://github.com/votre-username/esilvchatbot.git
+cd esilvchatbot
 ```
 
 ### 2. Configuration de l'environnement
@@ -62,8 +62,12 @@ git checkout -b fix/correction-bug
 - Vérifiez qu'il n'y a pas d'erreurs de linting
 
 ```bash
+npx tsc --noEmit
 npm run lint
+npm test
 ```
+
+Ces trois commandes sont celles de la CI (`.github/workflows/ci.yml`).
 
 ### 5. Commit et push
 
@@ -84,7 +88,7 @@ git push origin feature/ma-nouvelle-fonctionnalite
 ### Structure du projet
 
 ```
-llmgenaip/
+esilvchatbot/
 ├── src/
 │   ├── app/              # Pages et API routes
 │   ├── components/       # Composants React
@@ -167,7 +171,8 @@ refactor: extraction de la logique AI dans un service séparé
 
 - [ ] Le code compile sans erreurs
 - [ ] Pas d'erreurs de linting (`npm run lint`)
-- [ ] Les tests passent (si applicable)
+- [ ] Pas d'erreur de types (`npx tsc --noEmit`)
+- [ ] Les tests passent (`npm test`)
 - [ ] La documentation est à jour
 - [ ] Les commits suivent la convention
 - [ ] La PR a une description claire
