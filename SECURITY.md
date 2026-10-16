@@ -25,10 +25,11 @@ L'application expose un chat public, une base de connaissances (RAG) alimentée 
 
 ### 2. Routes d'administration
 
-- Pages `/admin/*`, `/rag-viewer` et routes d'écriture (`/api/knowledge`, `/api/documents/upload`, `/api/rag-updates`, `POST /api/ai-config`, `GET /api/form-submit`) : protégées par un cookie de session signé HMAC vérifié dans `src/middleware.ts` (PR #2, `fix/admin-auth-middleware`). Variables requises : `ADMIN_PASSWORD`, `SESSION_SECRET`.
+- Pages `/admin/*`, `/rag-viewer` et routes d'écriture (`/api/knowledge`, `/api/documents/upload`, `/api/rag-updates`, `POST /api/ai-config`, `GET /api/form-submit`, `POST /api/scraper`) : protégées par un cookie de session signé HMAC vérifié dans `src/middleware.ts` (PR #8, qui remplace #2). Variables requises : `ADMIN_PASSWORD`, `SESSION_SECRET`.
 - `GET /api/ai-config` ne renvoie plus les clés API des fournisseurs (PR #1, `fix/ai-config-key-leak`).
-- **Non couvert par #2** : `POST /api/scraper` (paramètre `autoSave`) et `/api/chat` écrivent dans la base de connaissances sans authentification. Le contenu vient uniquement de www.esilv.fr (URL de base fixe), mais un appelant peut provoquer des écritures et des requêtes sortantes en volume.
-- Les appels internes du chat vers `/api/knowledge` et `/api/rag-updates` partent sans cookie : avec #2, ils reçoivent 401 et la mise à jour automatique du RAG échoue.
+- Le chat appelle `/api/scraper`, `/api/knowledge` et `/api/rag-updates` en interne (dans le même processus, sans HTTP), donc sans passer par le middleware.
+- **Reste public** : `/api/chat` peut toujours déclencher des écritures dans la base (pages scrapées, résolution de conflits). Le contenu vient uniquement de www.esilv.fr (URL de base fixe), mais un appelant peut provoquer des écritures et des requêtes sortantes en volume.
+- Les scripts `scripts/kb-manager.js` et `scripts/update-rag-with-urls.js` appellent `/api/knowledge` sans cookie : ils reçoivent 401 tant qu'ils ne gèrent pas la connexion admin.
 
 ### 3. Upload de documents
 
