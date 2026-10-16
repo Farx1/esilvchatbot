@@ -288,7 +288,7 @@ class ChatOrchestrator {
     const response = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: {
-        'x-api-key': config.apiKey,
+        'x-api-key': config.apiKey ?? '',
         'content-type': 'application/json',
         'anthropic-version': '2023-06-01'
       },

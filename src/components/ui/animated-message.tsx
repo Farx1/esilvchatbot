@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { motion, AnimatePresence } from 'framer-motion'
+import { motion, AnimatePresence, type Variants } from 'framer-motion'
 import { MessageSquare, Bot, User, ThumbsUp, ThumbsDown, Copy, CheckCircle } from 'lucide-react'
 
 interface AnimatedMessageProps {
@@ -26,7 +26,7 @@ export default function AnimatedMessage({
   const [showFeedback, setShowFeedback] = useState(false)
   const [userFeedback, setUserFeedback] = useState<'up' | 'down' | null>(null)
 
-  const variants = {
+  const variants: Variants = {
     hidden: { 
       opacity: 0, 
       y: 20,
