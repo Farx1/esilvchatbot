@@ -91,7 +91,7 @@ Compatible avec plusieurs fournisseurs d'IA :
 
 ### Prérequis
 
-- Node.js 18+ 
+- Node.js 20.6+ (`node --env-file`)
 - npm ou pnpm
 - Git
 - Ollama (recommandé pour le développement local)
