@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server'
 import { db } from '@/lib/db'
 import { ChatOrchestrator as AIChatOrchestrator } from '@/app/api/ai-config/route'
+import { hasKeyword } from '@/lib/keyword-match'
 
 // Agent types
 type AgentType = 'retrieval' | 'form_filling' | 'orchestration'
@@ -37,14 +38,12 @@ class StreamingChatOrchestrator {
       'rendez-vous', 'visite', 'inscription', 'postuler', 'candidature'
     ]
 
-    const lowerMessage = message.toLowerCase()
-
-    if (formKeywords.some(keyword => lowerMessage.includes(keyword))) {
-      return 'form_filling'
+    if (hasKeyword(message, retrievalKeywords)) {
+      return 'retrieval'
     }
 
-    if (retrievalKeywords.some(keyword => lowerMessage.includes(keyword))) {
-      return 'retrieval'
+    if (hasKeyword(message, formKeywords)) {
+      return 'form_filling'
     }
 
     return 'orchestration'

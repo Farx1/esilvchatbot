@@ -151,21 +151,24 @@ export async function POST(request: NextRequest) {
 
       case 'delete_by_keywords': {
         const { keywords } = body
-        
+        // An empty string would match (and delete) every entry
+        if (typeof keywords !== 'string' || !keywords.trim()) {
+          return NextResponse.json({ error: 'keywords must be a non-empty string' }, { status: 400 })
+        }
+
+        // SQLite LIKE is already case-insensitive for ASCII; Prisma has no `mode` option on SQLite
         // Supprimer toutes les entrées qui contiennent certains mots-clés
         const deleted = await db.knowledgeBase.deleteMany({
           where: {
             OR: [
               {
                 question: {
-                  contains: keywords,
-                  mode: 'insensitive'
+                  contains: keywords
                 }
               },
               {
                 answer: {
-                  contains: keywords,
-                  mode: 'insensitive'
+                  contains: keywords
                 }
               }
             ]

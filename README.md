@@ -92,7 +92,7 @@ Compatible avec plusieurs fournisseurs d'IA :
 
 ### Prérequis
 
-- Node.js 18+ 
+- Node.js 20.6+ (`node --env-file`)
 - npm ou pnpm
 - Git
 - Ollama (recommandé pour le développement local)
@@ -114,18 +114,19 @@ cp .env.example .env
 # 4. Initialiser la base de données
 npm run db:push
 
-# 5. ⚠️ IMPORTANT : Enrichir la base de connaissances AVANT de lancer l'app
-# Charger les données ESILV (~30 entrées manuelles)
+# 5. ⚠️ IMPORTANT : Charger les données ESILV (~30 entrées, écrit directement en base)
 node scripts/seed-esilv-complete-v2.js
-
-# Enrichir avec 200+ URLs ESILV (recommandé)
-node scripts/update-rag-with-urls.js
 
 # 6. Lancer le serveur
 npm run dev
+
+# 7. Enrichir avec 200+ URLs ESILV (recommandé), dans un 2e terminal, serveur lancé
+node --env-file=.env scripts/update-rag-with-urls.js
 ```
 
-> **⚠️ Important** : Il est **obligatoire** d'exécuter les scripts de seed (`update-rag-with-urls.js`) **AVANT** de lancer l'application pour la première fois. Sinon, la base de connaissances sera vide et le chatbot ne pourra pas répondre correctement.
+> **⚠️ Important** : sans le seed de l'étape 5, la base de connaissances est vide et le chatbot ne peut pas répondre correctement.
+>
+> `update-rag-with-urls.js` passe par l'API (`/api/knowledge`) : il lui faut le serveur sur `localhost:3000` et `ADMIN_PASSWORD` dans `.env`, car il se connecte en admin depuis #8 (`--env-file` : Node 20.6+).
 
 L'application sera disponible sur **http://localhost:3000**
 
@@ -326,7 +327,7 @@ npx prisma studio        # Interface visuelle Prisma
 
 # Base de connaissances
 node scripts/seed-esilv-complete-v2.js     # Seed ~30 entrées
-node scripts/update-rag-with-urls.js       # Ajouter 200+ URLs
+node --env-file=.env scripts/update-rag-with-urls.js  # Ajouter 200+ URLs (serveur lancé, ADMIN_PASSWORD)
 node scripts/validate-rag-data.js          # Valider les données
 
 # Ollama
