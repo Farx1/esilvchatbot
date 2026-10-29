@@ -367,7 +367,7 @@ export default function KnowledgeDatabaseManager() {
                     </label>
                     <Input
                       value={editingItem?.question || ''}
-                      onChange={(e) => setEditingItem({...editingItem, question: e.target.value})}
+                      onChange={(e) => setEditingItem({...editingItem!, question: e.target.value})}
                       placeholder="Ex: Quelles sont les majeures à ESILV ?"
                     />
                   </div>
@@ -378,7 +378,7 @@ export default function KnowledgeDatabaseManager() {
                     </label>
                     <textarea
                       value={editingItem?.answer || ''}
-                      onChange={(e) => setEditingItem({...editingItem, answer: e.target.value})}
+                      onChange={(e) => setEditingItem({...editingItem!, answer: e.target.value})}
                       placeholder="Réponse détaillée..."
                       className="min-h-[200px] w-full p-3 border rounded-md"
                     />
@@ -391,7 +391,7 @@ export default function KnowledgeDatabaseManager() {
                       </label>
                       <select
                         value={editingItem?.category || 'programs'}
-                        onChange={(e) => setEditingItem({...editingItem, category: e.target.value})}
+                        onChange={(e) => setEditingItem({...editingItem!, category: e.target.value})}
                         className="w-full p-2 border rounded-md"
                       >
                         <option value="programs">Programmes</option>
@@ -417,7 +417,7 @@ export default function KnowledgeDatabaseManager() {
                         max="1"
                         step="0.1"
                         value={editingItem?.confidence || 0.9}
-                        onChange={(e) => setEditingItem({...editingItem, confidence: parseFloat(e.target.value)})}
+                        onChange={(e) => setEditingItem({...editingItem!, confidence: parseFloat(e.target.value)})}
                         className="w-full p-2 border rounded-md"
                       />
                     </div>
@@ -434,7 +434,7 @@ export default function KnowledgeDatabaseManager() {
                       Annuler
                     </Button>
                     <Button
-                      onClick={() => handleSave(editingItem)}
+                      onClick={() => handleSave(editingItem!)}
                       disabled={isLoading}
                     >
                       {isLoading ? 'Sauvegarde...' : 'Sauvegarder'}

@@ -22,6 +22,7 @@ interface Message {
   timestamp: Date
   feedback?: 'positive' | 'negative' | 'neutral' | null
   confidence?: number // Score de confiance (0-1)
+  isStreaming?: boolean
 }
 
 export default function EnhancedESILVChatbot() {
@@ -392,7 +393,7 @@ export default function EnhancedESILVChatbot() {
                 {healthStatus === 'healthy' && (
                   <>
                     <motion.div
-                      animate={{ pulse: [1, 1.2, 1] }}
+                      animate={{ scale: [1, 1.2, 1] }}
                       transition={{ duration: 2, repeat: Infinity }}
                     >
                       <div className="w-3 h-3 bg-green-400 rounded-full"></div>
@@ -403,7 +404,7 @@ export default function EnhancedESILVChatbot() {
                 {healthStatus === 'degraded' && (
                   <>
                     <motion.div
-                      animate={{ pulse: [1, 1.2, 1] }}
+                      animate={{ scale: [1, 1.2, 1] }}
                       transition={{ duration: 2, repeat: Infinity }}
                     >
                       <div className="w-3 h-3 bg-yellow-400 rounded-full"></div>

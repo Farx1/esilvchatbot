@@ -181,7 +181,7 @@ export async function POST(request: NextRequest) {
     console.log(`📄 Document "${file.name}" parsed: ${content.length} chars, ${chunks.length} chunks`)
 
     // Save each chunk to KnowledgeBase
-    const savedChunks = []
+    const savedChunks: string[] = []
     const uploadedAt = new Date()
 
     for (let i = 0; i < chunks.length; i++) {
