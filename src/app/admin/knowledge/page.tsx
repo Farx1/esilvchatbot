@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import { Search, Plus, Edit, Trash2, Eye, Download, RefreshCw } from 'lucide-react'
+import { Search, Plus, Edit, Trash2, Eye, Download, RefreshCw, Database } from 'lucide-react'
 import { ScrollArea } from '@/components/ui/scroll-area'
 
 interface KnowledgeItem {
