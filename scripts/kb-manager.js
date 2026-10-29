@@ -7,6 +7,7 @@
 
 const fs = require('fs');
 const path = require('path');
+const { adminHeaders } = require('./admin-session');
 
 // Colors for console output
 const colors = {
@@ -42,7 +43,7 @@ async function checkKnowledgeBase() {
         // Get detailed stats
         const searchResponse = await fetch('http://localhost:3000/api/knowledge', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: await adminHeaders(),
           body: JSON.stringify({ action: 'search', query: '' })
         });
         const searchData = await searchResponse.json();
@@ -74,7 +75,7 @@ async function seedKnowledgeBase() {
     
     const response = await fetch('http://localhost:3000/api/knowledge', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: await adminHeaders(),
       body: JSON.stringify({ action: 'seed' })
     });
     
@@ -96,7 +97,7 @@ async function searchKnowledgeBase(query) {
     
     const response = await fetch('http://localhost:3000/api/knowledge', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: await adminHeaders(),
       body: JSON.stringify({ action: 'search', query })
     });
     

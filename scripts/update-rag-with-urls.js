@@ -4,6 +4,7 @@
  */
 
 const cheerio = require('cheerio');
+const { adminHeaders } = require('./admin-session');
 
 // Liste des URLs à ajouter au RAG (~200 URLs)
 const urlsToAdd = [
@@ -301,7 +302,7 @@ async function correctIncorrectUrl() {
     
     const searchResponse = await fetch('http://localhost:3000/api/knowledge', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: await adminHeaders(),
       body: JSON.stringify({
         action: 'search',
         query: 'alumni',
@@ -325,7 +326,7 @@ async function correctIncorrectUrl() {
         console.log(`🗑️  Suppression de l'entrée: ${entry.id}`);
         await fetch('http://localhost:3000/api/knowledge', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: await adminHeaders(),
           body: JSON.stringify({
             action: 'delete',
             id: entry.id
@@ -362,7 +363,7 @@ async function addUrlsToRag(options = {}) {
       if (skipExisting) {
         const searchResponse = await fetch('http://localhost:3000/api/knowledge', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: await adminHeaders(),
           body: JSON.stringify({
             action: 'search',
             query: url,
@@ -398,7 +399,7 @@ async function addUrlsToRag(options = {}) {
         // Ajouter au RAG
         const addResponse = await fetch('http://localhost:3000/api/knowledge', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: await adminHeaders(),
           body: JSON.stringify({
             action: 'create',
             item: pageData
