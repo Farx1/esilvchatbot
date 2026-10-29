@@ -55,7 +55,7 @@ class AIProviderManager {
       },
       huggingface: {
         provider: 'huggingface',
-        model: process.env.HUGGINGFACE_API_KEY || 'microsoft/DialoGPT-medium',
+        model: process.env.HUGGINGFACE_MODEL || 'microsoft/DialoGPT-medium',
         apiKey: process.env.HUGGINGFACE_API_KEY,
         baseUrl: 'https://api-inference.huggingface.co',
         maxTokens: 2000,
@@ -397,6 +397,11 @@ class ChatOrchestrator {
   }
 }
 
+// Never send provider secrets to the client
+function publicConfig({ apiKey, ...config }: AIConfig) {
+  return { ...config, hasApiKey: Boolean(apiKey) }
+}
+
 // API Routes for AI Provider Management
 export async function GET(request: NextRequest) {
   try {
@@ -405,7 +410,7 @@ export async function GET(request: NextRequest) {
     const availableModels = aiManager.getAvailableModels()
 
     return NextResponse.json({
-      current: currentConfig,
+      current: publicConfig(currentConfig),
       available: availableModels
     })
   } catch (error) {
@@ -427,7 +432,7 @@ export async function POST(request: NextRequest) {
     if (success) {
       return NextResponse.json({
         message: 'Provider switched successfully',
-        config: aiManager.getConfig()
+        config: publicConfig(aiManager.getConfig())
       })
     } else {
       return NextResponse.json(
