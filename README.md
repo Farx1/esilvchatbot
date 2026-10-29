@@ -2,11 +2,8 @@
 
 Assistant intelligent pour l'École Supérieure d'Ingénieurs Léonard-de-Vinci (ESILV), développé avec Next.js, TypeScript et IA générative.
 
-[![Version](https://img.shields.io/badge/version-1.2.0-blue.svg)](https://github.com/Farx1/esilvchatbot)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![Next.js](https://img.shields.io/badge/Next.js-15.3.5-black)](https://nextjs.org/)
-
-**Version actuelle :** `v1.2.0`
 
 ---
 
@@ -25,16 +22,17 @@ Assistant intelligent pour l'École Supérieure d'Ingénieurs Léonard-de-Vinci 
 
 ## ✨ Fonctionnalités
 
-### 🤖 Système Multi-Agents Intelligent
+### 🤖 Routage d'intention par mots-clés
 
-- **Agent RAG (Retrieval)** : Recherche dans une base de connaissances enrichie (125+ entrées)
-- **Agent Scraper** : Vérification automatique et mise à jour des données via web scraping
-- **Agent Form-Filling** : Collecte structurée d'informations avec génération de formulaires
-- **Agent Orchestration** : Dialogue conversationnel général sur l'ESILV
+Un seul orchestrateur (`src/app/api/chat/route.ts`) choisit, par mots-clés, l'un de 3 handlers LLM :
+
+- **Retrieval** : RAG par recherche de mots-clés sur SQLite (sans embeddings) ; peut appeler le scraper web pour vérifier/compléter (badge `SCRAPER` dans ce cas)
+- **Form-filling** : prompt LLM qui demande les coordonnées dans la conversation (aucun formulaire n'est rendu)
+- **Orchestration** : dialogue général sur l'ESILV
 
 ### 📚 Base de Connaissances (RAG) Enrichie
 
-- **125+ entrées** couvrant tous les aspects de l'ESILV
+- **~30 entrées** saisies manuellement (`scripts/seed-esilv-complete-v2.js`)
 - **200+ URLs** du site ESILV intégrées automatiquement
 - **15 majeures** de spécialisation documentées
 - Informations complètes sur :
@@ -93,7 +91,7 @@ Compatible avec plusieurs fournisseurs d'IA :
 
 ### Prérequis
 
-- Node.js 18+ 
+- Node.js 20.6+ (`node --env-file`)
 - npm ou pnpm
 - Git
 - Ollama (recommandé pour le développement local)
@@ -110,23 +108,24 @@ npm install
 
 # 3. Configurer l'environnement
 cp .env.example .env
-# Éditer .env avec vos configurations
+# Éditer .env (voir .env.example pour la liste complète)
 
 # 4. Initialiser la base de données
 npm run db:push
 
-# 5. ⚠️ IMPORTANT : Enrichir la base de connaissances AVANT de lancer l'app
-# Charger les données ESILV (125+ entrées manuelles)
+# 5. ⚠️ IMPORTANT : Charger les données ESILV (~30 entrées, écrit directement en base)
 node scripts/seed-esilv-complete-v2.js
-
-# Enrichir avec 200+ URLs ESILV (recommandé)
-node scripts/update-rag-with-urls.js
 
 # 6. Lancer le serveur
 npm run dev
+
+# 7. Enrichir avec 200+ URLs ESILV (recommandé), dans un 2e terminal, serveur lancé
+node --env-file=.env scripts/update-rag-with-urls.js
 ```
 
-> **⚠️ Important** : Il est **obligatoire** d'exécuter les scripts de seed (`update-rag-with-urls.js`) **AVANT** de lancer l'application pour la première fois. Sinon, la base de connaissances sera vide et le chatbot ne pourra pas répondre correctement.
+> **⚠️ Important** : sans le seed de l'étape 5, la base de connaissances est vide et le chatbot ne peut pas répondre correctement.
+>
+> `update-rag-with-urls.js` passe par l'API (`/api/knowledge`) : il lui faut le serveur sur `localhost:3000` et `ADMIN_PASSWORD` dans `.env`, car il se connecte en admin depuis #8 (`--env-file` : Node 20.6+).
 
 L'application sera disponible sur **http://localhost:3000**
 
@@ -155,11 +154,12 @@ GEMINI_MODEL=gemini-2.0-flash-exp
 OPENAI_API_KEY=sk-...
 OPENAI_MODEL=gpt-4
 
-# Session & Auth
-NEXTAUTH_SECRET=votre-secret-32-caracteres
-NEXTAUTH_URL=http://localhost:3000
-SESSION_SECRET=votre-secret-session
+# Admin (/admin/*, /rag-viewer, routes d'écriture)
+ADMIN_PASSWORD=mot-de-passe-admin
+SESSION_SECRET=chaine-aleatoire-longue
 ```
+
+Liste complète des variables lues par le code : [`.env.example`](.env.example).
 
 ### Configuration d'Ollama
 
@@ -175,7 +175,7 @@ ollama pull llama3:latest
 # Démarrer Ollama (auto-démarre sur Windows/Mac)
 ollama serve
 
-# Ou utiliser le script
+# Ou utiliser le script (Windows)
 npm run ollama:start
 ```
 
@@ -200,10 +200,9 @@ npm run ollama:start
 
 ### Administration
 
-1. Se connecter sur **/admin/login**
-2. Accéder au dashboard **/admin**
-3. Visualiser les analytics **/admin/analytics**
-4. Gérer le RAG **/rag-viewer**
+1. Se connecter sur **/admin/login** (mot de passe `ADMIN_PASSWORD`)
+2. Visualiser les analytics **/admin/analytics**
+3. Gérer la base de connaissances **/admin/knowledge** ou **/rag-viewer**
 
 ---
 
@@ -212,17 +211,17 @@ npm run ollama:start
 ### Stack Technique
 
 ```
-Frontend (Next.js 15 + React + TypeScript)
+Frontend (Next.js 15 + React 19 + TypeScript)
     ↓
 API Routes (Next.js API)
-    ├─ /api/chat          → Orchestration multi-agents
+    ├─ /api/chat          → Routage par mots-clés vers 3 handlers LLM
     ├─ /api/knowledge     → Gestion RAG (CRUD)
     ├─ /api/scraper       → Web scraping ESILV
     ├─ /api/documents     → Upload & parsing
     └─ /api/health        → Health check
     ↓
 Services
-    ├─ RAG (Prisma + SQLite)
+    ├─ RAG (Prisma + SQLite, recherche par mots-clés)
     ├─ AI Providers (Ollama / Gemini / OpenAI)
     ├─ Scraper (Cheerio + Node Fetch)
     └─ Document Parser (pdf-parse-fork, mammoth)
@@ -241,7 +240,7 @@ esilvchatbot/
 │   │   │   ├── documents/      # Upload & parsing
 │   │   │   ├── health/         # Health check
 │   │   │   └── ai-config/      # Config AI providers
-│   │   ├── admin/              # Dashboard admin
+│   │   ├── admin/              # login, analytics, knowledge
 │   │   ├── rag-viewer/         # Visualisation RAG
 │   │   └── page.tsx            # Interface chatbot
 │   ├── components/             # Composants React
@@ -250,7 +249,7 @@ esilvchatbot/
 ├── prisma/
 │   └── schema.prisma           # Schéma DB (SQLite)
 ├── scripts/
-│   ├── seed-esilv-complete-v2.js    # Seed 125+ entrées
+│   ├── seed-esilv-complete-v2.js    # Seed ~30 entrées
 │   ├── update-rag-with-urls.js      # Ajouter 200+ URLs
 │   └── validate-rag-data.js         # Tests automatisés
 ├── docs/                       # Documentation complète
@@ -266,7 +265,7 @@ esilvchatbot/
 ### Frontend
 
 - **Next.js 15** (App Router, Server Components)
-- **React 18** + TypeScript
+- **React 19** + TypeScript
 - **Tailwind CSS** + shadcn/ui
 - **Framer Motion** (animations)
 - **Lucide React** (icônes)
@@ -283,9 +282,8 @@ esilvchatbot/
 ### AI / ML
 
 - **Ollama** (modèles locaux)
-- **Google Generative AI SDK**
-- **OpenAI API**
-- **Anthropic SDK**
+- **Google Generative AI SDK** (`@google/generative-ai`)
+- **OpenAI, Anthropic, Hugging Face** : appels HTTP directs (`fetch`), sans SDK
 
 ---
 
@@ -322,16 +320,16 @@ npm run lint             # Vérifier le code
 npm run db:push          # Synchroniser le schéma Prisma
 npm run db:migrate       # Créer une migration
 npm run db:reset         # Réinitialiser la base
-npm run db:studio        # Interface visuelle Prisma
+npx prisma studio        # Interface visuelle Prisma
 
 # Base de connaissances
-node scripts/seed-esilv-complete-v2.js     # Seed 125+ entrées
-node scripts/update-rag-with-urls.js       # Ajouter 200+ URLs
+node scripts/seed-esilv-complete-v2.js     # Seed ~30 entrées
+node --env-file=.env scripts/update-rag-with-urls.js  # Ajouter 200+ URLs (serveur lancé, ADMIN_PASSWORD)
 node scripts/validate-rag-data.js          # Valider les données
 
 # Ollama
 npm run ollama:start     # Démarrer Ollama (Windows)
-npm run ollama:models    # Lister les modèles
+ollama list              # Lister les modèles
 ```
 
 ---
@@ -372,10 +370,10 @@ Voir [CONTRIBUTING.md](CONTRIBUTING.md) pour plus de détails.
 
 ### v1.0.0 (2025-11) - Version Initiale
 
-- ✅ Système multi-agents (RAG, Form, Orchestration)
+- ✅ Routage par mots-clés (RAG, Form, Orchestration)
 - ✅ Interface chatbot complète
 - ✅ Support multi-LLM (Ollama, Gemini, OpenAI)
-- ✅ Base de connaissances 125+ entrées
+- ✅ Base de connaissances initiale
 
 ---
 
